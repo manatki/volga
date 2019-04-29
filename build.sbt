@@ -2,12 +2,25 @@ name := "volga"
 
 version := "0.1"
 
-scalaVersion := "2.12.8"
+scalaVersion in ThisBuild := "2.12.8"
 
-libraryDependencies += "org.typelevel" %% "cats-core" % "1.6.0"
+val libs = libraryDependencies += "org.typelevel" %% "cats-core" % "1.6.0"
 
-lazy val core = project in file("modules/core")
-lazy val macros = project in file("modules/macros")
+val plugins = libraryDependencies ++=
+  List(
+    compilerPlugin("org.typelevel" %% "kind-projector" % "0.10.0")
+  )
+
+val macroDeps = List(
+  libraryDependencies ++= List(
+    compilerPlugin("org.scalamacros" % "paradise" % "2.1.1" cross CrossVersion.patch),
+    scalaOrganization.value % "scala-reflect" % scalaVersion.value % Provided
+  ),
+  scalacOptions += "-language:experimental.macros"
+)
+
+lazy val core   = (project in file("modules/core")).settings(plugins, libs)
+lazy val macros = (project in file("modules/macros")).settings(macroDeps).dependsOn(core)
 
 scalacOptions ++=
   List(
