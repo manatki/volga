@@ -4,7 +4,10 @@ version := "0.1"
 
 scalaVersion in ThisBuild := "2.12.8"
 
-val libs = libraryDependencies += "org.typelevel" %% "cats-core" % "1.6.0"
+val libs = libraryDependencies ++= List(
+  "org.typelevel" %% "cats-core" % "1.6.0",
+  "com.github.julien-truffaut" %%  "monocle-macro" % "1.5.1-cats"
+)
 
 val plugins = libraryDependencies ++=
   List(
