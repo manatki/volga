@@ -23,9 +23,9 @@ val macroDeps = List(
 )
 
 lazy val core   = (project in file("modules/core")).settings(plugins, libs)
-lazy val macros = (project in file("modules/macros")).settings(macroDeps).dependsOn(core)
+lazy val macros = (project in file("modules/macros")).settings(macroDeps, plugins).dependsOn(core)
 
-scalacOptions ++=
+scalacOptions in ThisBuild ++=
   List(
     "-Ypartial-unification",
     "-language:higherKinds"
