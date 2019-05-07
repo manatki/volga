@@ -1,10 +1,14 @@
 package volga
 
 import cats.Functor
+import cats.arrow.Arrow
 import cats.data.StateT
 import cats.instances.either._
 import cats.instances.list._
 import cats.instances.option._
+import cats.instances.set._
+import cats.instances.map._
+import cats.kernel.Monoid
 import cats.syntax.either._
 import cats.syntax.foldable._
 import cats.syntax.traverse._
@@ -12,6 +16,9 @@ import monocle.PLens
 import monocle.function.all._
 import monocle.macros.{Lenses, PLenses}
 import monocle.syntax.apply._
+import cats.syntax.option._
+import cats.syntax.monoid._
+import cats.syntax.functor._
 
 import scala.annotation.tailrec
 import scala.reflect.macros.blackbox
@@ -19,10 +26,9 @@ import scala.util.control.NonFatal
 
 class syntaxMacro(val c: blackbox.Context) {
   import c.universe._
-
+  val syntSym = reify(syntax).tree.symbol
   object Syntax {
-    val syn                          = reify(syntax).tree.symbol
-    def unapply(tree: Tree): Boolean = tree.symbol == syn
+    def unapply(tree: Tree): Boolean = tree.symbol == syntSym
   }
 
   object Split {
@@ -58,9 +64,22 @@ class syntaxMacro(val c: blackbox.Context) {
       }
   }
 
-  def sarr(body: c.Tree)(vb: Tree): c.Tree = arr(body)
+  def sarr[P: WeakTypeTag](body: c.Tree)(vb: Tree): c.Tree = arr[P](body)
 
-  def arr(body: c.Tree): c.Tree = {
+  private def constructArrConnect(conn: parse.Connect[TermName]): Tree = {
+    val (ins, outs) = conn
+    val inpat       = ins.map(names => pq"(..$names)").reduce((a, b) => pq"($a, $b)")
+    val outres      = outs.map(names => q"(..$names)").reduce((a, b) => q"($a, $b)")
+    val param       = c.freshName[TermName]("input")
+    val parin       = q"val $param = $EmptyTree"
+    q"$syntSym.liftf ($parin => $param match { case $inpat => $outres })"
+  }
+
+  def getOrPass(types: Map[TermName, Type], P: Type)(a: Assoc[Option[Tree], List[TermName], List[TermName]]) =
+    a.app.getOrElse(q"$syntSym.ident[$P, (..${a.in.map(types)})]")
+
+  def arr[P: WeakTypeTag](body: c.Tree): c.Tree = {
+    val P = weakTypeOf[P].typeConstructor
     val elems: List[Any] = body match {
       case q"(..$xs) => $b" =>
         b match {
@@ -68,9 +87,18 @@ class syntaxMacro(val c: blackbox.Context) {
             val lm                   = ls.toList.map(matchElem)
             val xns                  = xs.collect { case ValDef(_, name, _, _) => name }.toList
             val ps                   = parse.collectBody(ls.toList, xns, matchElem)
-            val Assoc(body, in, out) = ps.fold({ case (to, x) => c.abort(to.fold(c.enclosingPosition)(_.pos), x) }, identity)
-            val bodspl               = body.map(_.map { case Assoc(b, ins, outs) => s"$outs <- $b -< $ins" }).intercalate(List("<<SPLIT>>"))
-            in :: out :: bodspl
+            val (types, parsed)      = ps.fold({ case (to, x) => c.abort(to.fold(c.enclosingPosition)(_.pos), x) }, identity)
+            val withReuse            = parse.addReuse(parsed)
+            val connects             = parse.inOuts(withReuse).map(constructArrConnect)
+            val typeMap              = types.toMap
+            val flow                 = withReuse.app.map(_.map(getOrPass(typeMap, P)).reduce((a, b) => q"($a.split($b))"))
+            val res                  = parse.alternate(connects, flow).reduce((x, y) => q"($x.andThen($y))")
+            val Assoc(body, in, out) = withReuse
+
+            val bodspl = body
+              .map(_.map { case Assoc(b, ins, outs) => s"$outs <- ${b.getOrElse("<<REUSE>>")} -< $ins" })
+              .intercalate(List("<<SPLIT>>"))
+            types :: res :: in :: out :: bodspl
           case _ => List(xs, b)
         }
       case _ => List(body)
@@ -82,18 +110,18 @@ class syntaxMacro(val c: blackbox.Context) {
       """
   }
 
-  def matchElem[A](t: Tree): ParseElem[Tree, TermName] = t match {
-    case ValDef(_, name, _, ArrSyn(smth, args)) => ParseElem.Single(args, name, smth)
-    case ValDef(_, name, _, VarElem(v, i))      => ParseElem.MultiAdd(v, name, i - 1)
+  def matchElem[A](t: Tree): (List[(TermName, Type)], ParseElem[Tree, TermName]) = t match {
+    case ValDef(_, name, q"${t: Type}", ArrSyn(smth, args)) => (List(name -> t), ParseElem.Single(args, name, smth))
+    case ValDef(_, name, q"${t: Type}", VarElem(v, i))      => (List(name -> t), ParseElem.MultiAdd(v, name, i - 1))
     case ValDef(mods, name, t, Match(ArrSyn(smth, args), _)) if mods.hasFlag(Flag.SYNTHETIC) =>
       val arity = t.tpe match {
         case TypeRef(_, _, xs) => xs.length
         case _                 => 0
       }
-      ParseElem.MultiStart(args, name, smth, arity)
-    case q"${Split()}"          => ParseElem.Split
-    case q"(..${Names(names)})" => ParseElem.Result(names)
-    case l                      => ParseElem.Other(l)
+      (List(), ParseElem.MultiStart(args, name, smth, arity))
+    case q"${Split()}"          => (List(), ParseElem.Split)
+    case q"(..${Names(names)})" => (List(), ParseElem.Result(names))
+    case l                      => (List(), ParseElem.Other(l))
   }
 }
 
@@ -107,19 +135,22 @@ object syntax {
 
   def arr[P[_, _]] = new MkArr[P]
 
-  class MkArr[P[_, _]] {
-    def apply[VB, B](body: () => VB)(implicit vb: Vars[B, VB]): P[Unit, B] = macro syntaxMacro.sarr
+  def ident[P[_, _], A](implicit arr: Arrow[P]): P[A, A]               = arr.id
+  def liftf[P[_, _], A, B](f: A => B)(implicit arr: Arrow[P]): P[A, B] = arr.lift(f)
 
-    def apply[A, VB, B](body: V[A] => VB)(implicit vb: Vars[B, VB]): P[A, B] = macro syntaxMacro.sarr
+  class MkArr[P[_, _]] {
+    def apply[VB, B](body: () => VB)(implicit vb: Vars[B, VB]): P[Unit, B] = macro syntaxMacro.sarr[P[Unit, Unit]]
+
+    def apply[A, VB, B](body: V[A] => VB)(implicit vb: Vars[B, VB]): P[A, B] = macro syntaxMacro.sarr[P[Unit, Unit]]
 
     def apply[A1, A2, VB, B](body: (V[A1], V[A2]) => VB)(implicit vb: Vars[B, VB]): P[(A1, A2), B] =
-      macro syntaxMacro.sarr
+      macro syntaxMacro.sarr[P[Unit, Unit]]
 
     def apply[A1, A2, A3, VB, B](body: (V[A1], V[A2], V[A3]) => VB)(implicit vb: Vars[B, VB]): P[(A1, A2, A3), B] =
-      macro syntaxMacro.sarr
+      macro syntaxMacro.sarr[P[Unit, Unit]]
 
     def apply[A1, A2, A3, A4, VB, B](body: (V[A1], V[A2], V[A3], V[A4]) => VB)(implicit vb: Vars[B, VB]): P[(A1, A2, A3), B] =
-      macro syntaxMacro.sarr
+      macro syntaxMacro.sarr[P[Unit, Unit]]
   }
 
   implicit class ArrSyn[P[_, _], A, B](val s: P[A, B]) extends AnyVal {
@@ -156,6 +187,7 @@ object syntax {
 @PLenses
 final case class Assoc[A, I, O](app: A, in: I, out: O) {
   def modOut[O1](f: O => O1) = copy(out = f(out))
+  def modApp[A1](f: A => A1) = copy(app = f(app))
 }
 object Assoc {
   def out1[A, I, O, O1]: PLens[Assoc[A, I, O], Assoc[A, I, O1], O, O1] = out
@@ -199,6 +231,8 @@ object parse {
   type Body[T, N]   = List[Block[T, N]]
   type Parsed[T, N] = AssocL[Body[T, N], N]
   type Result[X, A] = Either[(Option[X], String), A]
+  type Ports[N]     = List[List[N]]
+  type Connect[N]   = (Ports[N], Ports[N])
 
   private def prependUnless[A](xs: A, xss: List[A], p: Boolean): List[A] = if (p) xss else xs :: xss
 
@@ -218,31 +252,64 @@ object parse {
     (body: List[List[AssocL[(T, X), N]]]).flatTraverse(assocs => StateT(walk(_: Set[N])(assocs))).runA(in.toSet)
   }
 
-  def collectBody[T, N, X](xs: List[X], in: List[N], parse: X => ParseElem[T, N]): Result[X, Parsed[T, N]] =
+  def collectBody[T, N, X, M: Monoid](xs: List[X],
+                                      in: List[N],
+                                      parse: X => (M, ParseElem[T, N])): Result[X, (M, Parsed[T, N])] =
     xs.reverse match {
       case Nil => Left((None, "empty body"))
       case last :: restRev =>
         parse(last) match {
-          case Result(out) =>
+          case (mi, Result(out)) =>
             restRev.reverse
-              .foldLeftM[Result[X, ?], (Collect[(T, X), N, N, N], Body[(T, X), N])]((Collect(), Nil)) {
-                case ((coll, acc), x) =>
-                  parse(x) match {
-                    case Single(in1, out1, expr)      => (coll.addSingle(expr -> x, in1, out1), acc).asRight
-                    case MultiStart(in1, m, expr, ar) => (coll.startMultiIn(expr -> x, in1, m, ar), acc).asRight
-                    case MultiAdd(m, out1, idx)       => (coll.addMultiOut(m, idx, out1), acc).asRight
-                    case Split                        => (Collect[(T, X), N, N, N](), coll.assocs :: acc).asRight
-                    case Result(_)                    => (Some(x), "too early result").asLeft
-                    case Other(_)                     => (Some(x), "unknown expression").asLeft
+              .foldLeftM[Result[X, ?], (Collect[(T, X), N, N, N], Body[(T, X), N], M)]((Collect(), Nil, mi)) {
+                case ((coll, acc, ms), x) =>
+                  val (me, res) = parse(x)
+                  val mn        = ms |+| me
+                  res match {
+                    case Single(in1, out1, expr)      => (coll.addSingle(expr -> x, in1, out1), acc, mn).asRight
+                    case MultiStart(in1, m, expr, ar) => (coll.startMultiIn(expr -> x, in1, m, ar), acc, mn).asRight
+                    case MultiAdd(m, out1, idx)       => (coll.addMultiOut(m, idx, out1), acc, mn).asRight
+                    case Split                        => (Collect[(T, X), N, N, N](), coll.assocs :: acc, mn).asRight
+                    case Result(_)                    => (x.some, "too early result").asLeft
+                    case Other(_)                     => (x.some, "unknown expression").asLeft
                   }
               }
-              .flatMap { case (coll, acc) => splitUsage(prependUnless(coll.assocs, acc, coll.isEmpty).reverse, in) }
-              .map { bodyX =>
-                val body = Functor[List].compose[List].map(bodyX)(Assoc.app1.modify(_._1))
-                Assoc(body, in = in, out = out)
+              .flatMap {
+                case (coll, acc, m) => splitUsage(prependUnless(coll.assocs, acc, coll.isEmpty).reverse, in).tupleRight(m)
+              }
+              .map {
+                case (bodyX, m) =>
+                  val body = Functor[List].compose[List].map(bodyX)(Assoc.app1.modify(_._1))
+                  (m, Assoc(body, in = in, out = out))
               }
 
-          case _ => (Some(last), "final statement should be result").asLeft
+          case _ => (last.some, "final statement should be result").asLeft
         }
     }
+
+  def addReuse[T, N](p: Parsed[T, N]): Parsed[Option[T], N] =
+    p.modApp(
+      _.foldRight((p.out.toSet, List[Block[Option[T], N]]())) {
+        case (block, (need, acc)) =>
+          val provides    = (block: List[AssocL[T, N]]).foldMap(_.out.toSet)
+          val pass        = need -- provides
+          val mappedBlock = block.map(_.modApp(_.some))
+          val next        = (block: List[AssocL[T, N]]).foldMap(_.in.toSet) ++ pass
+          (next, prependUnless(Assoc(none[T], pass.toList, pass.toList), mappedBlock, pass.isEmpty) :: acc)
+      }._2
+    )
+
+  def inOuts[T, N](p: Parsed[T, N]): List[Connect[N]] = {
+    val ins  = List(p.in) :: p.app.map(_.map(_.out))
+    val outs = p.app.map(_.map(_.in)) :+ List(p.out)
+    ins.zip(outs)
+  }
+
+  def alternate[A](xs: List[A], ys: List[A]): List[A] = {
+    def go(xs1: List[A], ys1: List[A], acc: List[A]): List[A] = xs1 match {
+      case x :: rest => go(ys1, rest, x :: acc)
+      case Nil       => acc reverse_::: ys1
+    }
+    go(xs, ys, Nil)
+  }
 }
