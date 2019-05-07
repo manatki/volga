@@ -1,5 +1,7 @@
 package volga
 
+import cats.Functor
+import cats.data.StateT
 import cats.instances.either._
 import cats.instances.list._
 import cats.instances.option._
@@ -8,9 +10,10 @@ import cats.syntax.foldable._
 import cats.syntax.traverse._
 import monocle.PLens
 import monocle.function.all._
-import monocle.macros.Lenses
-import monocle.syntax.all._
+import monocle.macros.{Lenses, PLenses}
+import monocle.syntax.apply._
 
+import scala.annotation.tailrec
 import scala.reflect.macros.blackbox
 import scala.util.control.NonFatal
 
@@ -62,11 +65,12 @@ class syntaxMacro(val c: blackbox.Context) {
       case q"(..$xs) => $b" =>
         b match {
           case q"{..$ls}" =>
-            val lm  = ls.toList.map(matchElem)
-            val xns = xs.collect { case ValDef(_, name, _, _) => name }.toList
-            val ps  = parse.collectBody(ls.toList, xns, matchElem)
-            val ttt = ps.fold({ case (to, x) => c.abort(to.fold(c.enclosingPosition)(_.pos), x) }, identity)
-            ttt :: lm.toList ::: xs.toList ::: xns
+            val lm                   = ls.toList.map(matchElem)
+            val xns                  = xs.collect { case ValDef(_, name, _, _) => name }.toList
+            val ps                   = parse.collectBody(ls.toList, xns, matchElem)
+            val Assoc(body, in, out) = ps.fold({ case (to, x) => c.abort(to.fold(c.enclosingPosition)(_.pos), x) }, identity)
+            val bodspl               = body.map(_.map { case Assoc(b, ins, outs) => s"$outs <- $b -< $ins" }).intercalate(List("<<SPLIT>>"))
+            in :: out :: bodspl
           case _ => List(xs, b)
         }
       case _ => List(body)
@@ -119,10 +123,17 @@ object syntax {
   }
 
   implicit class ArrSyn[P[_, _], A, B](val s: P[A, B]) extends AnyVal {
-    def apply[X, VB](v: V[X])(implicit vb: Vars[B, VB]): VB                                                 = vb.va
-    def apply[X1, X2, VB](v1: V[X1], v2: V[X2])(implicit vb: Vars[B, VB]): VB                               = vb.va
-    def apply[X1, X2, X3, VB](v1: V[X1], v2: V[X2], v3: V[X3])(implicit vb: Vars[B, VB]): VB                = vb.va
-    def apply[X1, X2, X3, X4, VB](v1: V[X1], v2: V[X2], v3: V[X3], v4: V[X4])(implicit vb: Vars[B, VB]): VB = vb.va
+    def apply[X1, VB](v: V[X1])(implicit vb: Vars[B, VB], ev: X1 <:< A): VB                                          = vb.va
+    def apply[X1, X2, VB](v1: V[X1], v2: V[X2])(implicit vb: Vars[B, VB], ev: (X1, X2) <:< A): VB                    = vb.va
+    def apply[X1, X2, X3, VB](v1: V[X1], v2: V[X2], v3: V[X3])(implicit vb: Vars[B, VB], ev: (X1, X2, X3) <:< A): VB = vb.va
+    def apply[X1, X2, X3, X4, VB](v1: V[X1], v2: V[X2], v3: V[X3], v4: V[X4])(implicit vb: Vars[B, VB],
+                                                                              ev: (X1, X2, X3, X4) <:< A): VB = vb.va
+
+    def app[X1, VB](v: V[X1])(implicit vb: Vars[B, VB], ev: X1 <:< A): VB                                          = vb.va
+    def app[X1, X2, VB](v1: V[X1], v2: V[X2])(implicit vb: Vars[B, VB], ev: (X1, X2) <:< A): VB                    = vb.va
+    def app[X1, X2, X3, VB](v1: V[X1], v2: V[X2], v3: V[X3])(implicit vb: Vars[B, VB], ev: (X1, X2, X3) <:< A): VB = vb.va
+    def app[X1, X2, X3, X4, VB](v1: V[X1], v2: V[X2], v3: V[X3], v4: V[X4])(implicit vb: Vars[B, VB],
+                                                                            ev: (X1, X2, X3, X4) <:< A): VB = vb.va
   }
 
   final case class Vars[A, VA] private (va: VA)
@@ -142,25 +153,30 @@ object syntax {
   }
 }
 
-final case class Assoc[A, I, O](app: A, in: I, out: O)
+@PLenses
+final case class Assoc[A, I, O](app: A, in: I, out: O) {
+  def modOut[O1](f: O => O1) = copy(out = f(out))
+}
 object Assoc {
-  def out[K, I, O, O1] = PLens((_: Assoc[K, I, O]).out)((o1: O1) => _.copy(out = o1))
+  def out1[A, I, O, O1]: PLens[Assoc[A, I, O], Assoc[A, I, O1], O, O1] = out
+  def app1[A, I, O, A1]: PLens[Assoc[A, I, O], Assoc[A1, I, O], A, A1] = app
 }
 
 @Lenses
-final case class Collect[A, M, I, O](singles: List[Assoc[A, List[I], O]] = Nil,
+final case class Collect[A, M, I, O](singles: List[Either[M, Assoc[A, List[I], List[O]]]] = Nil,
                                      multis: Map[M, Assoc[A, List[I], Vector[Option[O]]]] = Map.empty[M, Nothing]) {
-  import Assoc.out
+  private def add(s: Either[M, Assoc[A, List[I], List[O]]]) =
+    this &|-> Collect.singles modify (s :: _)
+
   def addSingle(app: A, ins: List[I], out: O) =
-    this &|-> Collect.singles modify (Assoc(app, ins, out) :: _)
+    add(Right(Assoc(app, ins, List(out))))
   def startMultiIn(app: A, ins: List[I], m: M, arity: Int) =
-    this &|-> Collect.multis ^|-> at(m) set Some(Assoc(app, ins, Vector.fill[Option[O]](arity)(None)))
+    add(Left(m)) &|-> Collect.multis ^|-> at(m) set Some(Assoc(app, ins, Vector.fill[Option[O]](arity)(None)))
   def addMultiOut(m: M, idx: Int, out: O) =
-    this &|-> Collect.multis ^|-? index(m) ^|-> Assoc.out ^|-? index(idx) set Some(out)
+    this &|-> Collect.multis ^|-? index(m) ^|-> Assoc.out1 ^|-? index(idx) set Some(out)
 
   def assocs: List[Assoc[A, List[I], List[O]]] =
-    (singles.iterator.map(out.modify(List(_))) ++
-      multis.values.iterator.map(out.modify(_.toList.flatten))).toList
+    singles.map { _.fold(m => multis(m).modOut(_.toList.flatten), identity) }.reverse
 
   def isEmpty = singles.isEmpty && multis.isEmpty
 }
@@ -179,9 +195,28 @@ object ParseElem {
 object parse {
   import ParseElem._
   type AssocL[T, N] = Assoc[T, List[N], List[N]]
-  type Body[T, N]   = List[List[AssocL[T, N]]]
+  type Block[T, N]  = List[AssocL[T, N]]
+  type Body[T, N]   = List[Block[T, N]]
   type Parsed[T, N] = AssocL[Body[T, N], N]
   type Result[X, A] = Either[(Option[X], String), A]
+
+  private def prependUnless[A](xs: A, xss: List[A], p: Boolean): List[A] = if (p) xss else xs :: xss
+
+  def splitUsage[T, N, X](body: Body[(T, X), N], in: List[N]): Result[X, Body[(T, X), N]] = {
+    @tailrec def walk(known: Set[N])(items: Block[(T, X), N],
+                                     locally: Set[N] = known,
+                                     cur: Block[(T, X), N] = List(),
+                                     acc: Body[(T, X), N] = List()): Result[X, (Set[N], Body[(T, X), N])] =
+      items match {
+        case Nil => (locally, prependUnless(cur.reverse, acc, cur.isEmpty).reverse).asRight
+        case (a @ Assoc((t, x), in1, out)) :: rest =>
+          if (in1.forall(known)) walk(known)(rest, locally ++ out, a :: cur, acc)
+          else if (in1.forall(locally)) walk(locally)(rest, locally ++ out, List(a), cur.reverse :: acc)
+          else (Some(x), s"unknown input: ${in1.filterNot(locally).mkString(", ")} $known $locally").asLeft
+      }
+
+    (body: List[List[AssocL[(T, X), N]]]).flatTraverse(assocs => StateT(walk(_: Set[N])(assocs))).runA(in.toSet)
+  }
 
   def collectBody[T, N, X](xs: List[X], in: List[N], parse: X => ParseElem[T, N]): Result[X, Parsed[T, N]] =
     xs.reverse match {
@@ -190,19 +225,21 @@ object parse {
         parse(last) match {
           case Result(out) =>
             restRev.reverse
-              .foldLeftM[Result[X, ?], (Collect[T, N, N, N], Body[T, N])]((Collect(), Nil)) {
+              .foldLeftM[Result[X, ?], (Collect[(T, X), N, N, N], Body[(T, X), N])]((Collect(), Nil)) {
                 case ((coll, acc), x) =>
                   parse(x) match {
-                    case Single(in1, out, expr)      => (coll.addSingle(expr, in1, out), acc).asRight
-                    case MultiStart(in, m, expr, ar) => (coll.startMultiIn(expr, in, m, ar), acc).asRight
-                    case MultiAdd(m, out, idx)       => (coll.addMultiOut(m, idx, out), acc).asRight
-                    case Split                       => (Collect[T, N, N, N](), coll.assocs :: acc).asRight
-                    case Result(_)                   => (Some(x), "too early result").asLeft
-                    case Other(_)                    => (Some(x), "unknown expression").asLeft
+                    case Single(in1, out1, expr)      => (coll.addSingle(expr -> x, in1, out1), acc).asRight
+                    case MultiStart(in1, m, expr, ar) => (coll.startMultiIn(expr -> x, in1, m, ar), acc).asRight
+                    case MultiAdd(m, out1, idx)       => (coll.addMultiOut(m, idx, out1), acc).asRight
+                    case Split                        => (Collect[(T, X), N, N, N](), coll.assocs :: acc).asRight
+                    case Result(_)                    => (Some(x), "too early result").asLeft
+                    case Other(_)                     => (Some(x), "unknown expression").asLeft
                   }
               }
-              .map {
-                case (coll, acc) => Assoc((if (coll.isEmpty) coll.assocs :: acc else acc).reverse, in = in, out = out)
+              .flatMap { case (coll, acc) => splitUsage(prependUnless(coll.assocs, acc, coll.isEmpty).reverse, in) }
+              .map { bodyX =>
+                val body = Functor[List].compose[List].map(bodyX)(Assoc.app1.modify(_._1))
+                Assoc(body, in = in, out = out)
               }
 
           case _ => (Some(last), "final statement should be result").asLeft

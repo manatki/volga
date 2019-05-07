@@ -20,11 +20,14 @@ object Chepukku {
     arr[LK] { (x: V[Int], y: V[String]) =>
       val (a, i) = charIdxs(y)
       val b      = rep("a")(x)
-      ----
+//      ----
       val c      = rep("b")(a)
       val (d, j) = charIdxs(b)
-      ----
-      val z = Arrow[LK].lift(tupled[Int, Int, Int, Int](_ + _ + _))(d, i, j)
+//      ----
+      val u  = Arrow[LK].id[Int](i)
+      val z  = Arrow[LK].lift(tupled[Int, Int, Int, Int](_ + _ + _))(d, i, j)
+      val z1 = Arrow[LK].lift(tupled[Int, Int, Int, Int](_ + _ + _))(d, u, j)
+
       (c, z)
     }
 
