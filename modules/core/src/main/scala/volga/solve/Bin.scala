@@ -13,6 +13,7 @@ object BinOp {
   final case object RotateL extends BinOp
   final case object RotateR extends BinOp
   final case object Swap    extends BinOp
+  final case object Noop    extends BinOp
 
   final case class Split(left: List[BinOp], right: List[BinOp]) extends BinOp
 }
