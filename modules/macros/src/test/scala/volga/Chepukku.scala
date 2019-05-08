@@ -32,6 +32,6 @@ object Chepukku {
     }
 
   def main(args: Array[String]): Unit = {
-    tututu
+    println(tututu.run((2, "kek")))
   }
 }
