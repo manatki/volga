@@ -7,6 +7,7 @@ import cats.instances.list._
 import cats.syntax.compose._
 import cats.syntax.arrow._
 
+
 import scala.Function.tupled
 
 object Chepukku {
