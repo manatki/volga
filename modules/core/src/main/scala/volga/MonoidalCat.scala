@@ -3,8 +3,8 @@ package volga
 import cats.arrow.Category
 
 trait SemigropalCat[-->[_, _], x[_, _]] extends Category[-->] {
-  def assocl[a, b, c]: (a x (b x c)) --> (a x b x c)
-  def assocr[a, b, c]: (a x b x c) --> (a x (b x c))
+  def assocl[a, b, c]: (a x (b x c)) --> ((a x b) x c)
+  def assocr[a, b, c]: ((a x b) x c) --> (a x (b x c))
 }
 
 trait MonoidalCat[-->[_, _], x[_, _], i] extends SemigropalCat[-->, x] {
