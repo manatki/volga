@@ -32,6 +32,7 @@ object Chepukku {
       (c, z)
     }
 
+
   def main(args: Array[String]): Unit = {
     println(tututu.run((2, "kek")))
   }

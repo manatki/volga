@@ -11,9 +11,19 @@ import scala.reflect.macros.blackbox
 import scala.util.control.NonFatal
 
 class syntaxMacro(val c: blackbox.Context) extends Unappliers {
+
   import c.universe._
 
-  def sarr[P: WeakTypeTag](body: c.Tree)(vb: Tree): c.Tree = arr[P](body)
+  sealed trait Mode {
+    def P: Type
+  }
+
+  case class Arrow(P: Type)                    extends Mode
+  case class SymMon(P: Type, x: Type, I: Type) extends Mode
+
+  def arr[P: WeakTypeTag](body: c.Tree)(vb: Tree): c.Tree = generateSyntax(body, Arrow(weakTypeOf[P].typeConstructor))
+  def symmon[P: WeakTypeTag, x: WeakTypeTag, I: WeakTypeTag](body: c.Tree)(vb: Tree): c.Tree =
+    generateSyntax(body, SymMon(weakTypeOf[P].typeConstructor, weakTypeOf[x].typeConstructor, weakTypeOf[I].typeConstructor))
 
   private def constructArrConnect(P: Type, typeMap: Map[TermName, Type])(conn: parse.Connect[TermName]): Tree = {
     val (ins, outs) = conn
@@ -29,8 +39,8 @@ class syntaxMacro(val c: blackbox.Context) extends Unappliers {
   def getOrPass(types: Map[TermName, Type], P: Type)(a: Assoc[Option[Tree], List[TermName], List[TermName]]) =
     a.app.getOrElse(q"$syntSym.ident[$P, (..${a.in.map(types)})]")
 
-  def arr[P: WeakTypeTag](body: c.Tree): c.Tree = {
-    val P = weakTypeOf[P].typeConstructor
+  def generateSyntax(body: c.Tree, mode: Mode): c.Tree = {
+    val P = mode.P
     val (resOpt, elems: List[Any]) = body match {
       case q"(..$xs) => $b" =>
         b match {
@@ -55,7 +65,7 @@ class syntaxMacro(val c: blackbox.Context) extends Unappliers {
       case _ => (none, List(body))
     }
     val sss = elems.map(e => s"-----------\n$e\n").mkString
-    val res  = resOpt.getOrElse(q"null")
+    val res = resOpt.getOrElse(q"null")
     c.info(c.enclosingPosition, res.toString(), true)
     q"""
        println($sss)
