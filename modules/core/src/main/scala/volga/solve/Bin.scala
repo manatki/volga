@@ -1,17 +1,18 @@
 package volga.solve
-import cats.data.NonEmptyList
-import cats.{Applicative, Eval, Show, Traverse}
 import cats.instances.either._
 import cats.instances.option._
-import cats.instances.vector._
 import cats.instances.string._
-import cats.syntax.functor._
+import cats.instances.vector._
+import cats.kernel.Semigroup
 import cats.syntax.apply._
 import cats.syntax.either._
 import cats.syntax.foldable._
+import cats.syntax.functor._
+import cats.syntax.monad._
+import cats.syntax.monoid._
 import cats.syntax.option._
 import cats.syntax.show._
-import cats.syntax.monad._
+import cats.{Applicative, Eval, Show, Traverse}
 import volga.solve.Bin._
 import volga.solve.BinOp._
 
@@ -278,5 +279,58 @@ final case class BinZipper[+A](
            _.swapNext,
            _.repeat(j - i - 1)(_.walk(_.goUp, _.swapNext)),
            _.repeat(i)(_.goUp))
+}
 
+sealed abstract class BinRes[+A] {
+  def value: A
+
+  def ifBranch[A1 >: A](op: BinOp)(f: (BinRes[A], BinRes[A]) => BinRes[A1]): BinRes[A1]
+
+  def history: BinRes.History[A]
+
+  def clean: BinRes[A]
+
+  def withHistory[A1 >: A](prev: BinRes[A1], op: BinOp): BinRes[A1]
+}
+
+object BinRes {
+  type History[+A] = Vector[(BinRes[A], BinOp)]
+
+  implicit class Binaops[A: Semigroup](val b: BinRes[A]) {
+    def branch(c: BinRes[A]): BinRes[A] = c match {
+      case FailRes(v, h) => FailRes(b.value |+| c.value, h)
+      case _             => BranchRes(b, c, b.value |+| c.value, Vector())
+    }
+
+    def modAll(ops: Vector[BinOp]): BinRes[A] = ops.foldLeft(b)(_ mod _)
+
+    def mod(op: BinOp): BinRes[A] =
+      b.ifBranch(op)((l, r) =>
+          op match {
+            case Swap          => r branch l
+            case RotateR       => l.ifBranch(op)((ll, lr) => ll.branch(lr.branch(r)))
+            case RotateL       => r.ifBranch(op)((rl, rr) => l.branch(rl).branch(rr))
+            case Split(ls, rs) => l.clean.modAll(ls).branch(r.clean.modAll(rs))
+        })
+        .withHistory(b, op)
+
+  }
+
+  final case class LeafRes[+A](value: A) extends BinRes[A] {
+    def ifBranch[A1 >: A](op: BinOp)(f: (BinRes[A], BinRes[A]) => BinRes[A1]): BinRes[A1] =
+      FailRes(value, history :+ (this, op))
+    def history: Vector[(BinRes[A], BinOp)]                           = Vector()
+    def clean: BinRes[A]                                              = this
+    def withHistory[A1 >: A](prev: BinRes[A1], op: BinOp): BinRes[A1] = this
+  }
+  final case class BranchRes[+A](l: BinRes[A], r: BinRes[A], value: A, history: History[A]) extends BinRes[A] {
+    def ifBranch[A1 >: A](op: BinOp)(f: (BinRes[A], BinRes[A]) => BinRes[A1]): BinRes[A1] = f(l, r)
+    def clean: BinRes[A]                                                                  = copy(history = Vector())
+    def withHistory[A1 >: A](prev: BinRes[A1], op: BinOp): BinRes[A1]                     = copy(history = prev.history :+ (prev, op))
+  }
+  final case class FailRes[+A](value: A, history: History[A]) extends BinRes[A] {
+    def ifBranch[A1 >: A](op: BinOp)(f: (BinRes[A], BinRes[A]) => BinRes[A1]): BinRes[A1] = this
+    def clean: BinRes[A]                                                                  = this
+    def withHistory[A1 >: A](prev: BinRes[A1], op: BinOp): BinRes[A1]                     = this
+  }
 }
