@@ -10,7 +10,7 @@ import cats.syntax.option._
 import scala.reflect.macros.blackbox
 import scala.util.control.NonFatal
 
-class syntaxMacro(val c: blackbox.Context) extends Unappliers {
+class SyntaxMacro(val c: blackbox.Context) extends Unappliers {
 
   import c.universe._
 
@@ -40,31 +40,37 @@ class syntaxMacro(val c: blackbox.Context) extends Unappliers {
     a.app.getOrElse(q"$syntSym.ident[$P, (..${a.in.map(types)})]")
 
   def generateSyntax(body: c.Tree, mode: Mode): c.Tree = {
-    val P = mode.P
-    val (resOpt, elems: List[Any]) = body match {
+    val (resOpt, debug: List[Any]) = body match {
       case q"(..$xs) => $b" =>
         b match {
           case q"{..$ls}" =>
-            val lm                   = ls.toList.map(matchElem)
-            val xns                  = xs.collect { case ValDef(_, name, VarTyp(tt), _) => (name, tt) }.toList
-            val ps                   = parse.collectBody(ls.toList, xns.map(_._1), matchElem)
-            val (outTypes, parsed)   = ps.fold({ case (to, x) => c.abort(to.fold(c.enclosingPosition)(_.pos), x) }, identity)
-            val typeMap              = (xns ++ outTypes).toMap
-            val withReuse            = parse.addReuse(parsed)
-            val connects             = parse.inOuts(withReuse).map(constructArrConnect(P, typeMap))
-            val flow                 = withReuse.app.map(_.map(getOrPass(typeMap, P)).reduce((a, b) => q"($a.split($b))"))
-            val res                  = parse.alternate(connects, flow).reduce((x, y) => q"($x.andThen($y))")
-            val Assoc(body, in, out) = withReuse
+            val lm                 = ls.toList.map(matchElem)
+            val xns                = xs.collect { case ValDef(_, name, VarTyp(tt), _) => (name, tt) }.toList
+            val ps                 = parse.collectBody(ls.toList, xns.map(_._1), matchElem)
+            val (outTypes, parsed) = ps.fold({ case (to, x) => c.abort(to.fold(c.enclosingPosition)(_.pos), x) }, identity)
+            val typeMap            = (xns ++ outTypes).toMap
+            mode match {
+              case Arrow(p) =>
+                val withLaterUse         = parse.addLaterUse(parsed)
+                val connects             = parse.inOuts(withLaterUse).map(constructArrConnect(p, typeMap))
+                val flow                 = withLaterUse.app.map(_.map(getOrPass(typeMap, p)).reduce((a, b) => q"($a.split($b))"))
+                val res                  = parse.alternate(connects, flow).reduce((x, y) => q"($x.andThen($y))")
+                val Assoc(body, in, out) = withLaterUse
 
-            val bodspl = body
-              .map(_.map { case Assoc(b, ins, outs) => s"$outs <- ${b.getOrElse("<<REUSE>>")} -< $ins" })
-              .intercalate(List("<<SPLIT>>"))
-            (res.some, outTypes :: res :: in :: out :: bodspl)
+                val bodspl = body
+                  .map(_.map { case Assoc(b, ins, outs) => s"$outs <- ${b.getOrElse("<<REUSE>>")} -< $ins" })
+                  .intercalate(List("<<BREAK>>"))
+                (res.some, outTypes :: res :: in :: out :: bodspl)
+              case SymMon(p, x, i) =>
+                val reused = parse.preventReuse(parsed)
+                reused.foreach { case (t, n) => c.error(t.pos, s"variable $n is used second time") }
+                c.abort(c.enclosingPosition, " monoidal syntax not implemented")
+            }
           case _ => (none, List(xs, b))
         }
       case _ => (none, List(body))
     }
-    val sss = elems.map(e => s"-----------\n$e\n").mkString
+    val sss = debug.map(e => s"-----------\n$e\n").mkString
     val res = resOpt.getOrElse(q"null")
     c.info(c.enclosingPosition, res.toString(), true)
     q"""
@@ -82,7 +88,7 @@ class syntaxMacro(val c: blackbox.Context) extends Unappliers {
         case _                 => 0
       }
       (List(), ParseElem.MultiStart(args, name, smth, arity))
-    case q"${Split()}"          => (List(), ParseElem.Split)
+    case q"${Break()}"          => (List(), ParseElem.Split)
     case q"(..${Names(names)})" => (List(), ParseElem.Result(names))
     case l                      => (List(), ParseElem.Other(l))
   }
@@ -98,7 +104,7 @@ trait Unappliers {
     def unapply(tree: Tree): Boolean = tree.symbol == syntSym
   }
 
-  object Split {
+  object Break {
     def unapply(tree: Tree): Boolean =
       tree match {
         case q"${Syntax()}.----" => true

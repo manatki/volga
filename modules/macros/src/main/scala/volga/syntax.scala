@@ -18,34 +18,34 @@ object syntax {
   def liftf[P[_, _], A, B](f: A => B)(implicit arr: Arrow[P]): P[A, B] = arr.lift(f)
 
   class MkArr[P[_, _]] {
-    def apply[VB, B](body: () => VB)(implicit vb: Vars[B, VB]): P[Unit, B] = macro syntaxMacro.arr[P[Unit, Unit]]
+    def apply[VB, B](body: () => VB)(implicit vb: Vars[B, VB]): P[Unit, B] = macro SyntaxMacro.arr[P[Unit, Unit]]
 
-    def apply[A, VB, B](body: V[A] => VB)(implicit vb: Vars[B, VB]): P[A, B] = macro syntaxMacro.arr[P[Unit, Unit]]
+    def apply[A, VB, B](body: V[A] => VB)(implicit vb: Vars[B, VB]): P[A, B] = macro SyntaxMacro.arr[P[Unit, Unit]]
 
     def apply[A1, A2, VB, B](body: (V[A1], V[A2]) => VB)(implicit vb: Vars[B, VB]): P[(A1, A2), B] =
-      macro syntaxMacro.arr[P[Unit, Unit]]
+      macro SyntaxMacro.arr[P[Unit, Unit]]
 
     def apply[A1, A2, A3, VB, B](body: (V[A1], V[A2], V[A3]) => VB)(implicit vb: Vars[B, VB]): P[(A1, A2, A3), B] =
-      macro syntaxMacro.arr[P[Unit, Unit]]
+      macro SyntaxMacro.arr[P[Unit, Unit]]
 
     def apply[A1, A2, A3, A4, VB, B](body: (V[A1], V[A2], V[A3], V[A4]) => VB)(
         implicit vb: Vars[B, VB]): P[(A1, A2, A3, A4), B] =
-      macro syntaxMacro.arr[P[Unit, Unit]]
+      macro SyntaxMacro.arr[P[Unit, Unit]]
   }
 
   class MkSyMon[↦[_, _], ⊗[_, _], I] {
-    def apply[VB, B](body: () => VB)(implicit vb: Vars[B, VB]): I ↦ B = macro syntaxMacro.arr[Unit ↦ Unit]
+    def apply[VB, B](body: () => VB)(implicit vb: Vars[B, VB]): I ↦ B = macro SyntaxMacro.arr[Unit ↦ Unit]
 
-    def apply[A, VB, B](body: V[A] => VB)(implicit vb: Vars[B, VB]): A ↦ B = macro syntaxMacro.arr[Unit ↦ Unit]
+    def apply[A, VB, B](body: V[A] => VB)(implicit vb: Vars[B, VB]): A ↦ B = macro SyntaxMacro.arr[Unit ↦ Unit]
 
     def apply[A1, A2, VB, B](body: (V[A1], V[A2]) => VB)(implicit vb: Vars[B, VB]): (A1 ⊗ A2) ↦ B =
-      macro syntaxMacro.arr[Unit ↦ Unit]
+      macro SyntaxMacro.arr[Unit ↦ Unit]
 
     def apply[A1, A2, A3, VB, B](body: (V[A1], V[A2], V[A3]) => VB)(implicit vb: Vars[B, VB]): (A1 ⊗ A2 ⊗ A3) ↦ B =
-      macro syntaxMacro.arr[Unit ↦ Unit]
+      macro SyntaxMacro.arr[Unit ↦ Unit]
 
     def apply[A1, A2, A3, A4, VB, B](body: (V[A1], V[A2], V[A3], V[A4]) => VB)(
-        implicit vb: Vars[B, VB]): (A1 ⊗ A2 ⊗ A3 ⊗ A4) ↦ B = macro syntaxMacro.arr[Unit ↦ Unit]
+        implicit vb: Vars[B, VB]): (A1 ⊗ A2 ⊗ A3 ⊗ A4) ↦ B = macro SyntaxMacro.arr[Unit ↦ Unit]
   }
 
   implicit class ArrSyn[P[_, _], A, B](val s: P[A, B]) extends AnyVal {

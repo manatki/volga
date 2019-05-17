@@ -12,8 +12,9 @@ import cats.syntax.monad._
 import cats.syntax.monoid._
 import cats.syntax.option._
 import cats.syntax.show._
-import cats.{Applicative, Eval, Show, Traverse}
+import cats.{Applicative, Eval, Functor, Show, Traverse}
 import volga.solve.Bin._
+import volga.solve.BinHistory.{HRotateL, HRotateR, HSplit, HSwap}
 import volga.solve.BinOp._
 
 import scala.annotation.tailrec
@@ -62,7 +63,6 @@ sealed trait Bin[+A] {
         }
         .map(_.history ++ bin.zipper.linearize.top.history.invertAll)
     }
-
 }
 
 object Bin {
@@ -281,6 +281,24 @@ final case class BinZipper[+A](
            _.repeat(i)(_.goUp))
 }
 
+sealed trait BinHistory[+A]
+
+object BinHistory {
+  final case class HRotateL[+A](l: A, m: A, r: A)                                       extends BinHistory[A]
+  final case class HRotateR[+A](l: A, m: A, r: A)                                       extends BinHistory[A]
+  final case class HSwap[+A](l: A, r: A)                                                extends BinHistory[A]
+  final case class HSplit[+A](lops: Vector[BinHistory[A]], rops: Vector[BinHistory[A]]) extends BinHistory[A]
+
+  implicit val functor: Functor[BinHistory] = new Functor[BinHistory] {
+    def map[A, B](fa: BinHistory[A])(f: A => B): BinHistory[B] = fa match {
+      case HRotateL(l, m, r) => HRotateL(f(l), f(m), f(r))
+      case HRotateR(l, m, r) => HRotateR(f(l), f(m), f(r))
+      case HSwap(l, r)       => HSwap(f(l), f(r))
+      case HSplit(ls, rs)    => HSplit(ls.map(map(_)(f)), rs.map(map(_)(f)))
+    }
+  }
+}
+
 sealed abstract class BinRes[+A] {
   def value: A
 
@@ -290,47 +308,60 @@ sealed abstract class BinRes[+A] {
 
   def clean: BinRes[A]
 
-  def withHistory[A1 >: A](prev: BinRes[A1], op: BinOp): BinRes[A1]
+  def withHistory[A1 >: A](prev: BinRes[A1], op: BinHistory[A1]): BinRes[A1]
+
+  def success: Boolean
 }
 
 object BinRes {
-  type History[+A] = Vector[(BinRes[A], BinOp)]
+  type History[+A] = Vector[BinHistory[A]]
+
+  def apply[A: Semigroup](bin: Bin[A]): BinRes[A] = bin match {
+    case Leaf(a)      => LeafRes(a)
+    case Branch(l, r) => BinRes(l) branch BinRes(r)
+  }
 
   implicit class Binaops[A: Semigroup](val b: BinRes[A]) {
     def branch(c: BinRes[A]): BinRes[A] = c match {
-      case FailRes(v, h) => FailRes(b.value |+| c.value, h)
-      case _             => BranchRes(b, c, b.value |+| c.value, Vector())
+      case FailRes(v, h, ls) => FailRes(b.value |+| c.value, h, ls)
+      case _                 => BranchRes(b, c, b.value |+| c.value, Vector())
     }
 
     def modAll(ops: Vector[BinOp]): BinRes[A] = ops.foldLeft(b)(_ mod _)
 
     def mod(op: BinOp): BinRes[A] =
       b.ifBranch(op)((l, r) =>
-          op match {
-            case Swap          => r branch l
-            case RotateR       => l.ifBranch(op)((ll, lr) => ll.branch(lr.branch(r)))
-            case RotateL       => r.ifBranch(op)((rl, rr) => l.branch(rl).branch(rr))
-            case Split(ls, rs) => l.clean.modAll(ls).branch(r.clean.modAll(rs))
-        })
-        .withHistory(b, op)
+        op match {
+          case Swap => (r branch l) withHistory (b, HSwap(l.value, r.value))
+          case RotateR =>
+            l.ifBranch(op)((ll, lr) => ll.branch(lr.branch(r)) withHistory (b, HRotateR(ll.value, lr.value, r.value)))
+          case RotateL =>
+            r.ifBranch(op)((rl, rr) => l.branch(rl).branch(rr) withHistory (b, HRotateL(l.value, rl.value, rr.value)))
+          case Split(ls, rs) =>
+            val lt = l.clean.modAll(ls)
+            val rt = r.clean.modAll(rs)
+            lt.clean branch rt.clean withHistory (b, HSplit(lt.history, rt.history))
+      })
 
   }
 
   final case class LeafRes[+A](value: A) extends BinRes[A] {
-    def ifBranch[A1 >: A](op: BinOp)(f: (BinRes[A], BinRes[A]) => BinRes[A1]): BinRes[A1] =
-      FailRes(value, history :+ (this, op))
-    def history: Vector[(BinRes[A], BinOp)]                           = Vector()
-    def clean: BinRes[A]                                              = this
-    def withHistory[A1 >: A](prev: BinRes[A1], op: BinOp): BinRes[A1] = this
+    def ifBranch[A1 >: A](op: BinOp)(f: (BinRes[A], BinRes[A]) => BinRes[A1]): BinRes[A1] = FailRes(value, history, op)
+    def history: History[A]                                                               = Vector()
+    def clean: BinRes[A]                                                                  = this
+    def withHistory[A1 >: A](prev: BinRes[A1], op: BinHistory[A1]): BinRes[A1]            = this
+    def success                                                                           = true
   }
   final case class BranchRes[+A](l: BinRes[A], r: BinRes[A], value: A, history: History[A]) extends BinRes[A] {
     def ifBranch[A1 >: A](op: BinOp)(f: (BinRes[A], BinRes[A]) => BinRes[A1]): BinRes[A1] = f(l, r)
     def clean: BinRes[A]                                                                  = copy(history = Vector())
-    def withHistory[A1 >: A](prev: BinRes[A1], op: BinOp): BinRes[A1]                     = copy(history = prev.history :+ (prev, op))
+    def withHistory[A1 >: A](prev: BinRes[A1], op: BinHistory[A1]): BinRes[A1]            = copy(history = prev.history :+ op)
+    def success                                                                           = true
   }
-  final case class FailRes[+A](value: A, history: History[A]) extends BinRes[A] {
+  final case class FailRes[+A](value: A, history: History[A], last: BinOp) extends BinRes[A] {
     def ifBranch[A1 >: A](op: BinOp)(f: (BinRes[A], BinRes[A]) => BinRes[A1]): BinRes[A1] = this
     def clean: BinRes[A]                                                                  = this
-    def withHistory[A1 >: A](prev: BinRes[A1], op: BinOp): BinRes[A1]                     = this
+    def withHistory[A1 >: A](prev: BinRes[A1], op: BinHistory[A1]): BinRes[A1]            = this
+    def success                                                                           = false
   }
 }

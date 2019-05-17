@@ -22,6 +22,7 @@ object BinParser extends App {
   println(ta)
 
   println(tree.modAll(ta).show)
+
   val linearized = tree.zipper.linearize.top
   println(linearized.tree.show)
   val s12 = linearized.walk(_.rotateL, _.goLeft, _.swap, _.goUp, _.rotateR)

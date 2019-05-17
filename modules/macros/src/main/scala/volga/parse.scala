@@ -121,7 +121,7 @@ object parse {
         }
     }
 
-  def addReuse[T, N](p: Parsed[T, N]): Parsed[Option[T], N] =
+  def addLaterUse[T, N](p: Parsed[T, N]): Parsed[Option[T], N] =
     p.modApp(
       _.foldRight((p.out.toSet, List[Block[Option[T], N]]())) {
         case (block, (need, acc)) =>
@@ -132,6 +132,29 @@ object parse {
           (next, prependUnless(Assoc(none[T], pass.toList, pass.toList), mappedBlock, pass.isEmpty) :: acc)
       }._2
     )
+
+  def preventReuse[T, N](p: Parsed[T, N]): List[(T, N)] =
+    p.app.flatten
+      .foldLeft((p.in.toSet, Set[N](), List[(T, N)]())) {
+        case ((seen, used, acc), Assoc(app, i, o)) =>
+          (
+            seen ++ o,
+            used ++ i,
+            i.filter(used).tupleLeft(app) ::: acc
+          )
+      }
+      ._3
+
+//    p.modApp(
+//      _.foldRight((p.out.toSet, List[Block[Option[T], N]]())) {
+//        case (block, (need, acc)) =>
+//          val provides    = (block: List[AssocL[T, N]]).foldMap(_.out.toSet)
+//          val pass        = need -- provides
+//          val mappedBlock = block.map(_.modApp(_.some))
+//          val next        = (block: List[AssocL[T, N]]).foldMap(_.in.toSet) ++ pass
+//          (next, prependUnless(Assoc(none[T], pass.toList, pass.toList), mappedBlock, pass.isEmpty) :: acc)
+//      }._2
+//    )
 
   def inOuts[T, N](p: Parsed[T, N]): List[Connect[N]] = {
     val ins  = List(p.in) :: p.app.map(_.map(_.out))
