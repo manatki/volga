@@ -1,3 +1,3 @@
 # Volga
 
-Arrow and Monoidal Category composition syntax helper
+Arrow and Symmetric Monoidal Category composition syntax helper
