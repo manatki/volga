@@ -47,7 +47,7 @@ class SyntaxMacro(val c: blackbox.Context) extends Unappliers {
             val lm                 = ls.toList.map(matchElem)
             val xns                = xs.collect { case ValDef(_, name, VarTyp(tt), _) => (name, tt) }.toList
             val ps                 = parse.collectBody(ls.toList, xns.map(_._1), matchElem)
-            val (outTypes, parsed) = ps.fold({ case (to, x) => c.abort(to.fold(c.enclosingPosition)(_.pos), x) }, identity)
+            val (outTypes, parsed) = ps.fold({ case (to, x) => c.abort(to.fold(c.enclosingPosition)(_.pos), x + to.toString) }, identity)
             val typeMap            = (xns ++ outTypes).toMap
             mode match {
               case Arrow(p) =>
@@ -90,6 +90,8 @@ class SyntaxMacro(val c: blackbox.Context) extends Unappliers {
       (List(), ParseElem.MultiStart(args, name, smth, arity))
     case q"${Break()}"          => (List(), ParseElem.Split)
     case q"(..${Names(names)})" => (List(), ParseElem.Result(names))
+    case ValDef(_, name, VarTyp(tt), _) => c.abort(c.enclosingPosition, "lol")
+    case ValDef(_, name, _, ArrSyn(smth, args)) => c.abort(c.enclosingPosition, "kek")
     case l                      => (List(), ParseElem.Other(l))
   }
 }

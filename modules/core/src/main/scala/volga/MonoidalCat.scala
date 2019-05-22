@@ -1,62 +1,16 @@
 package volga
 
 import cats.arrow.Category
-import cats.Eq
-import cats.syntax.eq._
 
-trait Monoid[A] {
-  def neutral: A
-  def combine(x: A, y: A): A
 
-  implicit def setEq: Eq[A] = Eq.fromUniversalEquals
 
-  class MonoidLaws {
-    def left_unit(x: A) =
-      combine(neutral, x) == x
-    def right_unit(x: A) =
-      combine(x, neutral) == x
-    def associativity(x: A, y: A, z: A) =
-      combine(x, combine(y, z)) == combine(combine(x, y), z)
-  }
-}
 
-trait Cat[-->[_, _]] {
-  def id[A]: A --> A
-  def compose[A, B, C](f: B --> C, g: A --> B): A --> C
 
-  implicit def homEq[A, B]: Eq[A --> B] = Eq.fromUniversalEquals
-
-  class CatLaws {
-    def left_unit[A, B](f: A --> B) =
-      compose(id[B], f) === f
-    def right_unit[A, B](f: A --> B) =
-      compose(f, id[A]) === f
-    def associativity[A, B, C, D](f: A --> B, g: B --> C, h: C --> D) =
-      compose(h, compose(g, f)) === compose(compose(h, g), f)
-  }
-
-  case class <->[A, B](to: A --> B, from: B --> A) {
-    def section    = compose(to, from) === id
-    def retraction = compose(from, to) === id
-  }
-}
-
-trait SemigropalCat[-->[_, _], x[_, _]] extends Category[-->] with Cat[-->] {
+trait SemigropalCat[-->[_, _], x[_, _]] extends Category[-->] {
   def assocl[A, B, C]: (A x (B x C)) --> ((A x B) x C)
   def assocr[A, B, C]: ((A x B) x C) --> (A x (B x C))
 
-  def assoc[A, B, C]: (A x (B x C)) <-> ((A x B) x C) = <->(assocl, assocr)
-
   def tensor[A, B, C, D](f: A --> B, g: C --> D): (A x C) --> (B x D)
-
-  class SemigroupalCatLaws {
-    def pentagon[A, B, C, D] =
-      andThen(
-        andThen(tensor(assocr[A, B, C], id[D]), assocr[A, B x C, D]),
-        tensor(id[A], assocr[B, C, D])
-      ) ===
-        andThen(assocr[A x B, C, D], assocr[A, B, C x D])
-  }
 }
 
 trait MonoidalCat[-->[_, _], x[_, _], I] extends SemigropalCat[-->, x] {
@@ -64,21 +18,10 @@ trait MonoidalCat[-->[_, _], x[_, _], I] extends SemigropalCat[-->, x] {
   def unitl[A]: A --> (I x A)
   def runit[A]: (A x I) --> A
   def unitr[A]: A --> (A x I)
-
-  def left_unit[A]: (I x A) <-> A  = <->(lunit, unitl)
-  def right_unit[A]: (A x I) <-> A = <->(runit, unitr)
-
-  class MonoidalLaws {
-    def triagonal[A, B] =
-      assocr[A, I, B] ===
-        andThen(tensor(runit[A], id[B]), tensor(id[A], unitl[B]))
-  }
 }
 
 trait Sym[-->[_, _], x[_, _]] extends SemigropalCat[-->, x] {
   def swap[A, B]: (A x B) --> (B x A)
-
-  def symmetry[A, B]: (A x B) <-> (B x A) = <->(swap, swap)
 }
 
 trait Symon[-->[_, _], x[_, _], I] extends Sym[-->, x] with MonoidalCat[-->, x, I]
