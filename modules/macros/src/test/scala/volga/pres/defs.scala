@@ -144,3 +144,29 @@ trait Cartesian[->[_, _], x[_, _], I] extends Symon[->, x, I] {
 }
 
 trait CartesianClosed[->[_, _], x[_, _], ==>[_, _], I] extends Cartesian[->, x, I] with Closed[->, x, ==>, I]
+
+trait Arr[->[_, _]] extends Cartesian[->, (?, ?), Unit] {
+  def lift[A, B](f: A => B): A -> B
+  def split[A, B, C, D](f: A -> B, g: C -> D): (A, C) -> (B, D)
+  def compose[A, B, C](f: B -> C, g: A -> B): A -> C
+
+  def proj1[A, B]: (A, B) -> A = lift(_._1)
+  def proj2[A, B]: (A, B) -> B = lift(_._2)
+  def term[A]: A -> Unit = lift(_ => ())
+  def id[A]: A -> A = lift(a => a)
+  def product[A, B, C](f: A -> B, g: A -> C): A -> (B, C) =
+    compose(split(f, g), lift(a => (a, a)))
+  override def tensor[A, B, C, D](f: A -> B, g: C -> D): (A, C) -> (B, D) =
+    split(f, g)
+}
+
+trait MonoidSMC[A, ->[_, _], x[_, _], I]{
+  def zero: I -> A
+  def combine: (A x A) -> A
+}
+
+trait ComonoidSMC[A, ->[_, _], x[_, _],  I]{
+  def drop: A -> I
+  def duplicate: A -> (A x A)
+}
+
