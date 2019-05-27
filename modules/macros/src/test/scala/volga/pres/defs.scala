@@ -1,6 +1,5 @@
 package volga.pres
 
-
 import cats.Eq
 import cats.syntax.eq._
 
@@ -31,17 +30,19 @@ trait Cat[->[_, _]] {
       (id[A] >> f) === f
     def right_unit[A, B](f: A -> B) =
       (f >> id[B]) === f
-    def associativity[A, B, C, D](f: A -> B, g: B -> C, h: C -> D) =
+    def associativity[A, B, C, D](f: A -> B,
+                                  g: B -> C,
+                                  h: C -> D) =
       (f >> (g >> h)) === ((f >> g) >> h)
   }
 
   case class <->[A, B](to: A -> B, from: B -> A) {
-    def section = (to o from) === id
+    def section    = (to o from) === id
     def retraction = (from o to) === id
   }
 
   implicit class CatHomOps[A, B](f: A -> B) {
-    def o[C](g: C -> A): C -> B = compose(f, g)
+    def o[C](g: C -> A): C -> B  = compose(f, g)
     def >>[C](g: B -> C): A -> C = compose(g, f)
   }
 }
@@ -52,18 +53,25 @@ trait MonoidalCat[->[_, _], x[_, _], I] extends Cat[->] {
   def assoc[A, B, C]: (A x (B x C)) <-> ((A x B) x C)
   def ar[A, B, C] = assoc[A, B, C].from
 
-  def tensor[A, B, C, D](f: A -> B, g: C -> D): (A x C) -> (B x D)
+  def tensor[A, B, C, D](f: A -> B,
+                         g: C -> D): (A x C) -> (B x D)
 
   class MonoidalLaws {
     def pentagon[A, B, C, D] =
-      ((ar[A, B, C] x id[D]) >> ar[A, B x C, D] >> (id[A] x ar[B, C, D])) ===
+      ((ar[A, B, C] x id[D]) >> ar[A, B x C, D] >> (id[A] x ar[
+        B,
+        C,
+        D])) ===
         (ar[A x B, C, D] >> ar[A, B, C x D])
 
     def triagonal[A, B] =
-      ar[A, I, B] === ((right_unit[A].to x id[B]) >> (id[A] x left_unit[B].from))
+      ar[A, I, B] === ((right_unit[A].to x id[B]) >> (id[A] x left_unit[
+        B].from))
 
-    def tenson_dist[A, B, C, D, E, F]
-    (f: A -> B, g: B -> C, h: D -> E, i: E -> F) =
+    def tenson_dist[A, B, C, D, E, F](f: A -> B,
+                                      g: B -> C,
+                                      h: D -> E,
+                                      i: E -> F) =
       ((f x h) >> (g x i)) === ((f >> g) x (h >> i))
 
     def tensor_id[A, B] = (id[A] x id[B]) === id[A x B]
@@ -74,8 +82,8 @@ trait MonoidalCat[->[_, _], x[_, _], I] extends Cat[->] {
   }
 }
 
-
-trait Symon[->[_, _], x[_, _], I] extends MonoidalCat[->, x, I] {
+trait Symon[->[_, _], x[_, _], I]
+    extends MonoidalCat[->, x, I] {
   def swap[A, B]: (A x B) -> (B x A)
 
   def symmetry[A, B]: (A x B) <-> (B x A) = <->(swap, swap)
@@ -85,18 +93,22 @@ trait Symon[->[_, _], x[_, _], I] extends MonoidalCat[->, x, I] {
       swap[A, I] === (left_unit[A].from o right_unit[A].to)
 
     def assoc_coherence[A, B, C] =
-      ((swap[A, B] x id[C]) >> ar[B, A, C] >> (id[B] x swap[A, C])) ===
+      ((swap[A, B] x id[C]) >> ar[B, A, C] >> (id[B] x swap[
+        A,
+        C])) ===
         (ar[A, B, C] >> swap[A, B x C] >> ar[B, C, A])
   }
 }
 
-
-trait Closed[->[_, _], x[_, _], ==>[_, _], I] extends Symon[->, x, I] {
+trait Closed[->[_, _], x[_, _], ==>[_, _], I]
+    extends Symon[->, x, I] {
   def lcurry[A, B, C](p: (A x B) -> C): A -> (B ==> C)
   def luncurry[A, B, C](p: A -> (B ==> C)): (A x B) -> C
 
-  def rcurry[A, B, C](p: (A x B) -> C): B -> (A ==> C) = lcurry(compose(p, swap))
-  def runcurry[A, B, C](p: B -> (A ==> C)): (A x B) -> C = compose(luncurry(p), swap)
+  def rcurry[A, B, C](p: (A x B) -> C): B -> (A ==> C) =
+    lcurry(compose(p, swap))
+  def runcurry[A, B, C](p: B -> (A ==> C)): (A x B) -> C =
+    compose(luncurry(p), swap)
 
   def lapply[A, B]: ((A ==> B) x A) -> B = luncurry(id)
   def rapply[A, B]: (A x (A ==> B)) -> B = runcurry(id)
@@ -104,13 +116,16 @@ trait Closed[->[_, _], x[_, _], ==>[_, _], I] extends Symon[->, x, I] {
   def lunapply[A, B]: A -> (B ==> (A x B)) = lcurry(id)
   def runapply[A, B]: B -> (A ==> (A x B)) = rcurry(id)
 
-  def ident[A]: I -> (A ==> A) = lcurry(left_unit[A].to)
+  def ident[A]: I -> (A ==> A)  = lcurry(left_unit[A].to)
   def choose[A]: A -> (I ==> A) = lcurry(right_unit[A].to)
-  def unchoose[A]: (I ==> A) -> A = compose(lapply[I, A], right_unit[I ==> A].from)
+  def unchoose[A]: (I ==> A) -> A =
+    compose(lapply[I, A], right_unit[I ==> A].from)
 
   class ClosedLaws {
-    def curryEq[A, B, C](p: (A x B) -> C) = luncurry(lcurry(p)) === p
-    def uncurryEq[A, B, C](p: A -> (B ==> C)) = lcurry(luncurry(p)) === p
+    def curryEq[A, B, C](p: (A x B) -> C) =
+      luncurry(lcurry(p)) === p
+    def uncurryEq[A, B, C](p: A -> (B ==> C)) =
+      lcurry(luncurry(p)) === p
   }
 }
 
@@ -122,16 +137,22 @@ trait Cartesian[->[_, _], x[_, _], I] extends Symon[->, x, I] {
 
   def term[A]: A -> I
 
-  def left_unit[A]: (I x A) <-> A = <->(proj2[I, A], product(term, id))
-  def right_unit[A]: (A x I) <-> A = <->(proj1[A, I], product(id, term))
+  def left_unit[A]: (I x A) <-> A =
+    <->(proj2[I, A], product(term, id))
+  def right_unit[A]: (A x I) <-> A =
+    <->(proj1[A, I], product(id, term))
   def assoc[A, B, C]: (A x (B x C)) <-> ((A x B) x C) =
     <->(
-      product(product(proj1, compose(proj1[B, C], proj2)), compose(proj2[B, C], proj2)),
-      product(compose(proj1[A, B], proj1), product(compose(proj2[A, B], proj1), proj2)))
+      product(product(proj1, compose(proj1[B, C], proj2)),
+              compose(proj2[B, C], proj2)),
+      product(compose(proj1[A, B], proj1),
+              product(compose(proj2[A, B], proj1), proj2))
+    )
 
   def swap[A, B]: (A x B) -> (B x A) = product(proj2, proj1)
 
-  def tensor[A, B, C, D](f: A -> B, g: C -> D): (A x C) -> (B x D) =
+  def tensor[A, B, C, D](f: A -> B,
+                         g: C -> D): (A x C) -> (B x D) =
     product(compose(f, proj1), compose(g, proj2))
 
   class CartesianLaws {
@@ -143,7 +164,8 @@ trait Cartesian[->[_, _], x[_, _], I] extends Symon[->, x, I] {
   }
 }
 
-trait CartesianClosed[->[_, _], x[_, _], ==>[_, _], I] extends Cartesian[->, x, I] with Closed[->, x, ==>, I]
+trait CartesianClosed[->[_, _], x[_, _], ==>[_, _], I]
+    extends Cartesian[->, x, I] with Closed[->, x, ==>, I]
 
 trait Arr[->[_, _]] extends Cartesian[->, (?, ?), Unit] {
   def lift[A, B](f: A => B): A -> B
@@ -152,21 +174,21 @@ trait Arr[->[_, _]] extends Cartesian[->, (?, ?), Unit] {
 
   def proj1[A, B]: (A, B) -> A = lift(_._1)
   def proj2[A, B]: (A, B) -> B = lift(_._2)
-  def term[A]: A -> Unit = lift(_ => ())
-  def id[A]: A -> A = lift(a => a)
+  def term[A]: A -> Unit       = lift(_ => ())
+  def id[A]: A -> A            = lift(a => a)
   def product[A, B, C](f: A -> B, g: A -> C): A -> (B, C) =
     compose(split(f, g), lift(a => (a, a)))
-  override def tensor[A, B, C, D](f: A -> B, g: C -> D): (A, C) -> (B, D) =
+  override def tensor[A, B, C, D](f: A -> B,
+                                  g: C -> D): (A, C) -> (B, D) =
     split(f, g)
 }
 
-trait MonoidSMC[A, ->[_, _], x[_, _], I]{
+trait MonoidSMC[A, ->[_, _], x[_, _], I] {
   def zero: I -> A
   def combine: (A x A) -> A
 }
 
-trait ComonoidSMC[A, ->[_, _], x[_, _],  I]{
+trait ComonoidSMC[A, ->[_, _], x[_, _], I] {
   def drop: A -> I
   def duplicate: A -> (A x A)
 }
-
