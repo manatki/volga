@@ -124,10 +124,14 @@ trait Bicartesian[->[_, _], x[_, _], I, :+[_, _], O] extends Cartesian[->, x, I]
 
 }
 
+trait DistributiveCat[->[_, _], x[_, _], I, :+[_, _], O] extends Bicartesian[->, x, I, :+, O]{
+  def distribl[A, B, C]: (A x (B :+ C)) -> ((A x B) :+ (A x C))
+}
+
 trait CartesianClosed[->[_, _], x[_, _], ==>[_, _], I] extends Cartesian[->, x, I] with Closed[->, x, ==>, I]
 
 trait BicartesianClosed[->[_, _], x[_, _], ==>[_, _], I, :+[_, _], O]
-    extends Bicartesian[->, x, I, :+, O] with CartesianClosed[->, x, ==>, I] {
+    extends DistributiveCat[->, x, I, :+, O] with CartesianClosed[->, x, ==>, I] {
   def distribl[A, B, C]: (A x (B :+ C)) -> ((A x B) :+ (A x C)) =
     runcurry(
       sum(
