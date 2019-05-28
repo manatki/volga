@@ -12,10 +12,11 @@ import cats.syntax.monad._
 import cats.syntax.monoid._
 import cats.syntax.option._
 import cats.syntax.show._
-import cats.{Applicative, Eval, Functor, Show, Traverse}
+import cats.{Applicative, Eval, Functor, Monoid, Show, Traverse}
 import volga.solve.Bin._
-import volga.solve.BinHistory.{HRotateL, HRotateR, HSplit, HSwap}
+import volga.solve.BinHistory.{HConsume, HGrow, HRotate, HSplit, HSwap}
 import volga.solve.BinOp._
+import cats.syntax.applicative._
 
 import scala.annotation.tailrec
 
@@ -25,25 +26,42 @@ sealed trait Bin[+A] {
   def mod(binOp: BinOp): Either[Error, Bin[A]] = {
     def fail = Error(binOp, this).asLeft
 
-    this match {
-      case Leaf(_) => fail
-      case Branch(l, r) =>
-        binOp match {
-          case Swap => Branch(r, l).asRight
-          case Split(ls, rs) =>
-            (l.modAll(ls).leftMap(L :: _), r.modAll(rs).leftMap(R :: _)).mapN(Branch(_, _))
-          case RotateR =>
-            l match {
-              case Leaf(_)        => fail
-              case Branch(ll, lr) => Branch(ll, Branch(lr, r)).asRight
-            }
-          case RotateL =>
-            r match {
-              case Leaf(_)        => fail
-              case Branch(rl, rr) => Branch(Branch(l, rl), rr).asRight
+    binOp match {
+      case Grow(L) => Branch(Bud, this).asRight
+      case Grow(R) => Branch(this, Bud).asRight
+      case _ =>
+        this match {
+          case Leaf(_) | Bud => fail
+          case Branch(l, r) =>
+            binOp match {
+              case Swap => Branch(r, l).asRight
+              case Split(ls, rs) =>
+                (l.modAll(ls).leftMap(L :: _), r.modAll(rs).leftMap(R :: _)).mapN(Branch(_, _))
+              case Rotate(R) =>
+                l match {
+                  case Leaf(_) | Bud  => fail
+                  case Branch(ll, lr) => Branch(ll, Branch(lr, r)).asRight
+                }
+              case Rotate(L) =>
+                r match {
+                  case Leaf(_) | Bud  => fail
+                  case Branch(rl, rr) => Branch(Branch(l, rl), rr).asRight
+                }
+              case Consume(L) =>
+                l match {
+                  case Bud => r.asRight
+                  case _   => fail
+                }
+              case Consume(R) =>
+                r match {
+                  case Bud => l.asRight
+                  case _   => fail
+                }
+              case Grow(_) => fail
             }
         }
     }
+
   }
 
   def modAll(vs: Vector[BinOp]): Either[Error, Bin[A]] =
@@ -58,10 +76,10 @@ sealed trait Bin[+A] {
     Permutations.buildPerm(elems, bin.elems).leftMap(_.mkString_(",")).flatMap { perm =>
       Permutations
         .swaps(perm)
-        .foldM(zipper.linearize.top) {
+        .foldM(zipper.normalize) {
           case (z, (i, j)) => z.swapElems(i, j).liftTo[Either[String, ?]](s"Bad state while swapping $i <-> $j")
         }
-        .map(_.history ++ bin.zipper.linearize.top.history.invertAll)
+        .map(_.history ++ bin.zipper.normalize.history.invertAll)
     }
 }
 
@@ -73,10 +91,12 @@ object Bin {
     }
   }
   final case class Leaf[+A](a: A) extends Bin[A]
+  case object Bud                 extends Bin[Nothing]
 
   implicit def show[A: Show]: Show[Bin[A]] = {
     case Leaf(a)      => a.show
     case Branch(l, r) => show"($l, $r)"
+    case Bud          => "*"
   }
 
   implicit val traverse: Traverse[Bin] = new Traverse[Bin] {
@@ -84,6 +104,7 @@ object Bin {
       fa match {
         case Leaf(a)      => f(a).map(Leaf(_))
         case Branch(l, r) => traverse(l)(f).map2(traverse(r)(f))(Branch(_, _))
+        case Bud          => (Bud: Bin[B]).pure[G]
       }
     def foldLeft[A, B](fa: Bin[A], b: B)(f: (B, A) => B): B = {
       @tailrec def go(b1: B, bin: Bin[A], stack: List[Bin[A]]): B =
@@ -95,6 +116,11 @@ object Bin {
               case Nil          => b2
             }
           case Branch(l, r) => go(b1, l, r :: stack)
+          case Bud =>
+            stack match {
+              case head :: tail => go(b, head, tail)
+              case Nil          => b
+            }
         }
       go(b, fa, Nil)
     }
@@ -102,19 +128,25 @@ object Bin {
       fa match {
         case Leaf(a)      => f(a, lb)
         case Branch(l, r) => foldRight(l, Eval.defer(foldRight(r, lb)(f)))(f)
+        case Bud          => lb
+
       }
   }
 
 }
 
 sealed trait BinOp {
-  def exchange(other: BinOp): BinOp.Exchange
+  def tryExchange: PartialFunction[BinOp, BinOp.Exchange]
+
+  def exchange(other: BinOp): BinOp.Exchange =
+    tryExchange.applyOrElse(other, (_: BinOp) => Stop(this, other))
 
   def invert: BinOp = this match {
-    case RotateL     => RotateR
-    case RotateR     => RotateL
-    case Swap        => Swap
-    case Split(l, r) => Split(l.invertAll, r.invertAll)
+    case Rotate(side)  => Rotate(side.other)
+    case Swap          => Swap
+    case Split(l, r)   => Split(l.invertAll, r.invertAll)
+    case Grow(side)    => Consume(side)
+    case Consume(side) => Grow(side)
   }
 
   def isEmpty = false
@@ -140,32 +172,28 @@ object BinOp {
     }
   }
 
-  final case object RotateL extends BinOp {
-    def exchange(other: BinOp): Exchange = other match {
-      case RotateR                      => Stop()
-      case RotateL | Split(_, _) | Swap => Stop(this, other)
-    }
+  final case class Consume(side: Side) extends BinOp {
+    def tryExchange = { case Grow(`side`) => Stop() }
   }
-  final case object RotateR extends BinOp {
-    def exchange(other: BinOp): Exchange = other match {
-      case RotateL                      => Stop()
-      case RotateR | Split(_, _) | Swap => Stop(this, other)
-    }
+
+  final case class Grow(side: Side) extends BinOp {
+    def tryExchange = { case Consume(`side`) => Stop() }
   }
+
+  final case class Rotate(side: Side) extends BinOp {
+    def tryExchange = { case Rotate(s1) if s1 != side => Stop() }
+  }
+
   final case object Swap extends BinOp {
-    def exchange(other: BinOp): Exchange = other match {
-      case Swap                            => Stop()
-      case RotateR | RotateL | Split(_, _) => Stop(other, this)
-    }
+    def tryExchange = { case Swap => Stop() }
   }
 
   final case class Split(left: Vector[BinOp], right: Vector[BinOp]) extends BinOp {
     override val isEmpty = left.forall(_.isEmpty) && right.forall(_.isEmpty)
 
-    def exchange(other: BinOp): Exchange = other match {
-      case RotateL | RotateR => Stop(this, other)
-      case Swap              => Continue(Split(right, left), Swap)
-      case Split(lo, ro)     => Continue(Split(left mergeAll lo, right mergeAll ro))
+    def tryExchange = {
+      case Swap          => Continue(Split(right, left), Swap)
+      case Split(lo, ro) => Continue(Split(left mergeAll lo, right mergeAll ro))
     }
   }
 
@@ -177,9 +205,15 @@ object BinOp {
   sealed trait Index
   case class At(i: Int) extends Index
 
-  sealed trait Side extends Index
-  case object L     extends Side
-  case object R     extends Side
+  sealed trait Side extends Index {
+    def other: Side
+  }
+  case object L extends Side {
+    def other = R
+  }
+  case object R extends Side {
+    def other = L
+  }
 
   final case class Error(op: BinOp, tree: Bin[Any], path: List[Index] = Nil) {
     def ::(i: Index): Error     = copy(path = i :: path)
@@ -213,14 +247,26 @@ final case class BinZipper[+A](
   def goLeft  = go(L)
   def goRight = go(R)
 
-  def rotateL =
+  def grow(side: Side) = {
+    val bin1 = side match {
+      case L => Branch(Bud, bin)
+      case R => Branch(bin, Bud)
+    }
+    BinZipper(bin1, history put Grow(side), parent).some
+  }
+
+  def consume(side: Side) =
     bin.some.collect {
-      case Branch(l, Branch(rl, rr)) => BinZipper(Branch(Branch(l, rl), rr), history put RotateL, parent)
+      case Branch(Bud, t) if side == L => BinZipper(t, history put Consume(side), parent)
+      case Branch(t, Bud) if side == R => BinZipper(t, history put Consume(side), parent)
     }
 
-  def rotateR =
+  def rotate(side: Side) =
     bin.some.collect {
-      case Branch(Branch(ll, lr), r) => BinZipper(Branch(ll, Branch(lr, r)), history put RotateR, parent)
+      case Branch(l, Branch(rl, rr)) if side == L =>
+        BinZipper(Branch(Branch(l, rl), rr), history put Rotate(L), parent)
+      case Branch(Branch(ll, lr), r) if side == R =>
+        BinZipper(Branch(ll, Branch(lr, r)), history put Rotate(R), parent)
     }
 
   def swap =
@@ -237,8 +283,14 @@ final case class BinZipper[+A](
 
   def attempt[A1 >: A](f: Option[BinZipper[A1]]): BinZipper[A1] = f.getOrElse(this)
 
+  def clean: BinZipper[A] =
+    attempt(walk(_.goLeft.map(_.clean), _.goUp))
+      .attempt(walk(_.goRight.map(_.clean), _.goUp))
+      .attempt(consume(L))
+      .attempt(consume(R))
+
   def linearize: BinZipper[A] =
-    rotateR match {
+    rotate(R) match {
       case Some(t) => t.linearize
       case None =>
         goRight match {
@@ -246,6 +298,8 @@ final case class BinZipper[+A](
           case None    => this
         }
     }
+
+  def normalize: BinZipper[A] = clean.linearize.top
 
   def top: BinZipper[A] = goUp match {
     case Some(p) => p.top
@@ -257,17 +311,18 @@ final case class BinZipper[+A](
   def appMany(ops: Vector[BinOp]): Option[BinZipper[A]] = ops.foldM(this)(_ app _)
 
   def app(op: BinOp): Option[BinZipper[A]] = op match {
-    case RotateL       => rotateL
-    case RotateR       => rotateR
+    case Rotate(side)  => rotate(side)
     case Swap          => swap
     case Split(ls, rs) => walk(_.goLeft, _.appMany(ls), _.goUp, _.goRight, _.appMany(rs), _.goUp)
+    case Consume(side) => consume(side)
+    case Grow(side)    => grow(side)
   }
 
   def repeat[A1 >: A](count: Int)(act: BinZipper[A1] => Option[BinZipper[A1]]): Option[BinZipper[A1]] =
     (this: BinZipper[A1], count).iterateWhileM { case (z, c) => act(z).tupleRight(c - 1) }(_._2 > 0).map(_._1)
 
-  def swapNext = rotateL match {
-    case Some(z) => z.walk(_.goLeft, _.swap, _.goUp, _.rotateR)
+  def swapNext = rotate(L) match {
+    case Some(z) => z.walk(_.goLeft, _.swap, _.goUp, _.rotate(R))
     case None    => swap
   }
 
@@ -284,17 +339,19 @@ final case class BinZipper[+A](
 sealed trait BinHistory[+A]
 
 object BinHistory {
-  final case class HRotateL[+A](l: A, m: A, r: A)                                       extends BinHistory[A]
-  final case class HRotateR[+A](l: A, m: A, r: A)                                       extends BinHistory[A]
+  final case class HRotate[+A](side: Side, l: A, m: A, r: A)                            extends BinHistory[A]
   final case class HSwap[+A](l: A, r: A)                                                extends BinHistory[A]
   final case class HSplit[+A](lops: Vector[BinHistory[A]], rops: Vector[BinHistory[A]]) extends BinHistory[A]
+  final case class HConsume[+A](side: Side, v: A)                                       extends BinHistory[A]
+  final case class HGrow[+A](side: Side, v: A)                                          extends BinHistory[A]
 
   implicit val functor: Functor[BinHistory] = new Functor[BinHistory] {
     def map[A, B](fa: BinHistory[A])(f: A => B): BinHistory[B] = fa match {
-      case HRotateL(l, m, r) => HRotateL(f(l), f(m), f(r))
-      case HRotateR(l, m, r) => HRotateR(f(l), f(m), f(r))
-      case HSwap(l, r)       => HSwap(f(l), f(r))
-      case HSplit(ls, rs)    => HSplit(ls.map(map(_)(f)), rs.map(map(_)(f)))
+      case HRotate(side, l, m, r) => HRotate(side, f(l), f(m), f(r))
+      case HSwap(l, r)            => HSwap(f(l), f(r))
+      case HSplit(ls, rs)         => HSplit(ls.map(map(_)(f)), rs.map(map(_)(f)))
+      case HConsume(side, v)      => HConsume(side, f(v))
+      case HGrow(side, v)         => HGrow(side, f(v))
     }
   }
 }
@@ -316,12 +373,13 @@ sealed abstract class BinRes[+A] {
 object BinRes {
   type History[+A] = Vector[BinHistory[A]]
 
-  def apply[A: Semigroup](bin: Bin[A]): BinRes[A] = bin match {
+  def apply[A: Monoid](bin: Bin[A]): BinRes[A] = bin match {
     case Leaf(a)      => LeafRes(a)
     case Branch(l, r) => BinRes(l) branch BinRes(r)
+    case Bud          => LeafRes(Monoid.empty[A])
   }
 
-  implicit class Binaops[A: Semigroup](val b: BinRes[A]) {
+  implicit class Binaops[A: Monoid](val b: BinRes[A]) {
     def branch(c: BinRes[A]): BinRes[A] = c match {
       case FailRes(v, h, ls) => FailRes(b.value |+| c.value, h, ls)
       case _                 => BranchRes(b, c, b.value |+| c.value, Vector())
@@ -330,19 +388,28 @@ object BinRes {
     def modAll(ops: Vector[BinOp]): BinRes[A] = ops.foldLeft(b)(_ mod _)
 
     def mod(op: BinOp): BinRes[A] =
-      b.ifBranch(op)((l, r) =>
-        op match {
-          case Swap => (r branch l) withHistory (b, HSwap(l.value, r.value))
-          case RotateR =>
-            l.ifBranch(op)((ll, lr) => ll.branch(lr.branch(r)) withHistory (b, HRotateR(ll.value, lr.value, r.value)))
-          case RotateL =>
-            r.ifBranch(op)((rl, rr) => l.branch(rl).branch(rr) withHistory (b, HRotateL(l.value, rl.value, rr.value)))
-          case Split(ls, rs) =>
-            val lt = l.clean.modAll(ls)
-            val rt = r.clean.modAll(rs)
-            lt.clean branch rt.clean withHistory (b, HSplit(lt.history, rt.history))
-      })
-
+      op match {
+        case Grow(L) => LeafRes(Monoid.empty[A]) branch b withHistory (b, HGrow(L, b.value))
+        case Grow(R) => b branch LeafRes(Monoid.empty[A]) withHistory (b, HGrow(R, b.value))
+        case _ =>
+          b.ifBranch(op)((l, r) =>
+            op match {
+              case Swap => (r branch l) withHistory (b, HSwap(l.value, r.value))
+              case Rotate(R) =>
+                l.ifBranch(op)((ll, lr) =>
+                  ll.branch(lr.branch(r)) withHistory (b, HRotate(R, ll.value, lr.value, r.value)))
+              case Rotate(L) =>
+                r.ifBranch(op)((rl, rr) =>
+                  l.branch(rl).branch(rr) withHistory (b, HRotate(L, l.value, rl.value, rr.value)))
+              case Split(ls, rs) =>
+                val lt = l.clean.modAll(ls)
+                val rt = r.clean.modAll(rs)
+                lt.clean branch rt.clean withHistory (b, HSplit(lt.history, rt.history))
+              case Consume(L) => r.withHistory(b, HConsume(L, r.value))
+              case Consume(R) => l.withHistory(b, HConsume(R, r.value))
+              case Grow(_)    => b
+          })
+      }
   }
 
   final case class LeafRes[+A](value: A) extends BinRes[A] {

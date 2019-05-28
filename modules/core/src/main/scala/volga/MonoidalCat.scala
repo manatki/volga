@@ -36,11 +36,12 @@ trait Sym[->[_, _], x[_, _]] extends SemigropalCat[->, x] {
   def swap[A, B]: (A x B) -> (B x A)
 
   def assocr[A, B, C]: ((A x B) x C) -> (A x (B x C)) =
-    swap[B x C, A] o
-      (swap[C, B] x id[A]) o
-      assocl o
-      (id[C] x swap[A, B]) o
+    swap >>
+      (id[C] x swap[A, B]) >>
+      assocl >>
+      (swap[C, B] x id[A]) >>
       swap
+
 }
 
 trait Symon[->[_, _], x[_, _], I] extends Sym[->, x] with MonoidalCat[->, x, I] {
@@ -124,7 +125,7 @@ trait Bicartesian[->[_, _], x[_, _], I, :+[_, _], O] extends Cartesian[->, x, I]
 
 }
 
-trait DistributiveCat[->[_, _], x[_, _], I, :+[_, _], O] extends Bicartesian[->, x, I, :+, O]{
+trait DistributiveCat[->[_, _], x[_, _], I, :+[_, _], O] extends Bicartesian[->, x, I, :+, O] {
   def distribl[A, B, C]: (A x (B :+ C)) -> ((A x B) :+ (A x C))
 }
 
