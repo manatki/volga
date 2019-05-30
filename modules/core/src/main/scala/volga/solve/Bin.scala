@@ -284,8 +284,7 @@ final case class BinZipper[+A](
   def attempt[A1 >: A](f: Option[BinZipper[A1]]): BinZipper[A1] = f.getOrElse(this)
 
   def clean: BinZipper[A] =
-    attempt(walk(_.goLeft.map(_.clean), _.goUp))
-      .attempt(walk(_.goRight.map(_.clean), _.goUp))
+    attempt(walk(_.goLeft, _.clean.some, _.goUp, _.goRight, _.clean.some, _.goUp))
       .attempt(consume(L))
       .attempt(consume(R))
 

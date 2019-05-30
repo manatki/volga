@@ -14,9 +14,9 @@ object syntax {
 
   def symon[↦[_, _], ⊗[_, _], I] = new MkSyMon[↦, ⊗, I]
 
-  def ident[P[_, _], A](implicit arr: Arrow[P]): P[A, A] = arr.id
-  def liftf[P[_, _], A, B](f: A => B)(implicit arr: Arrow[P]): P[A, B] = arr.lift(f)
-  def liftf2[P[_, _], A1, A2, B](f: (A1, A2) => B)(implicit arr: Arrow[P]): P[(A1, A2), B] = arr.lift(f.tupled)
+  def ident[P[_, _], A](implicit arr: Arr[P]): P[A, A] = arr.id
+  def liftf[P[_, _], A, B](f: A => B)(implicit arr: Arr[P]): P[A, B] = arr.lift(f)
+  def liftf2[P[_, _], A1, A2, B](f: (A1, A2) => B)(implicit arr: Arr[P]): P[(A1, A2), B] = arr.lift(f.tupled)
 
   class MkArr[P[_, _]] {
     def apply[VB, B](body: () => VB)(implicit vb: Vars[B, VB]): P[Unit, B] = macro SyntaxMacro.arr[P[Unit, Unit], B]

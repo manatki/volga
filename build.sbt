@@ -16,7 +16,8 @@ val testLibs = libraryDependencies ++= List(
 
 val plugins = libraryDependencies ++=
   List(
-    compilerPlugin("org.typelevel" %% "kind-projector" % "0.10.0")
+    compilerPlugin("org.typelevel" %% "kind-projector"     % "0.10.0"),
+    compilerPlugin("com.olegpy"    %% "better-monadic-for" % "0.3.0")
   )
 
 val macroDeps = List(
@@ -27,8 +28,9 @@ val macroDeps = List(
   scalacOptions += "-language:experimental.macros"
 )
 
-lazy val core   = (project in file("modules/core")).settings(plugins, libs, testLibs)
-lazy val macros = (project in file("modules/macros")).settings(macroDeps, plugins).dependsOn(core)
+lazy val core    = (project in file("modules/core")).settings(plugins, libs, testLibs)
+lazy val macros  = (project in file("modules/macros")).settings(macroDeps, plugins).dependsOn(core)
+lazy val rebuild = (project in file("modules/rebuild")).settings(libs, plugins).dependsOn(core, macros)
 
 scalacOptions in ThisBuild ++=
   List(

@@ -18,10 +18,12 @@ object BinParser extends App {
   def binTree[_: P]              = bin ~ End
 
   val tree  = parse("((1,  (* , (2, 3))), (4, (5, 6)))", binTree(_), true).get.value
-  val tree2 = parse("(3, (((4, 1), 6), (5, 2))) ", binTree(_)).get.value
+  val tree2 = parse("(3, (((4, 1), (*, 6)), (5, (*, 2)))) ", binTree(_)).get.value
 
-  val ta = tree.adaptation(tree2).right.get
+  val ta = tree.adaptation(tree2).fold(s => throw new Exception(s), identity)
   println(ta)
+  val tc = tree.zipper.clean.tree
+  println(tc.show)
 
   println(tree.modAll(ta).show)
 
