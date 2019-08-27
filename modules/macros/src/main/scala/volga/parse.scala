@@ -53,12 +53,12 @@ final case class Collect[A, M, I, O](singles: List[Either[M, Assoc[A, List[I], L
 sealed trait ParseElem[+T, +N]
 
 object ParseElem {
-  final case class Single[+T, +N](in: List[N], out: N, expr: T) extends ParseElem[T, N]
+  final case class Single[+T, +N](in: List[N], out: N, expr: T)            extends ParseElem[T, N]
   final case class MultiStart[+T, +N](in: List[N], m: N, expr: T, ar: Int) extends ParseElem[T, N]
-  final case class MultiAdd[+N](m: N, out: N, idx: Int) extends ParseElem[Nothing, N]
-  final case class Result[+N](res: List[N]) extends ParseElem[Nothing, N]
-  case object Split extends ParseElem[Nothing, Nothing]
-  final case class Other[+T](t: T) extends ParseElem[T, Nothing]
+  final case class MultiAdd[+N](m: N, out: N, idx: Int)                    extends ParseElem[Nothing, N]
+  final case class Result[+N](res: List[N])                                extends ParseElem[Nothing, N]
+  case object Split                                                        extends ParseElem[Nothing, Nothing]
+  final case class Other[+T](t: T)                                         extends ParseElem[T, Nothing]
 }
 
 object parse {
@@ -66,12 +66,12 @@ object parse {
   import ParseElem._
 
   type AssocL[T, N] = Assoc[T, List[N], List[N]]
-  type Block[T, N] = List[AssocL[T, N]]
-  type Body[T, N] = List[Block[T, N]]
+  type Block[T, N]  = List[AssocL[T, N]]
+  type Body[T, N]   = List[Block[T, N]]
   type Parsed[T, N] = AssocL[Body[T, N], N]
   type Result[X, A] = Either[(Option[X], String), A]
-  type Ports[N] = List[List[N]]
-  type Connect[N] = (Ports[N], Ports[N])
+  type Ports[N]     = List[List[N]]
+  type Connect[N]   = (Ports[N], Ports[N])
 
   private def prependUnless[A](xs: A, xss: List[A], p: Boolean): List[A] = if (p) xss else xs :: xss
 
@@ -82,7 +82,7 @@ object parse {
                                      acc: Body[(T, X), N] = List()): Result[X, (Set[N], Body[(T, X), N])] =
       items match {
         case Nil => (locally, prependUnless(cur.reverse, acc, cur.isEmpty).reverse).asRight
-        case (a@Assoc((t, x), in1, out)) :: rest =>
+        case (a @ Assoc((t, x), in1, out)) :: rest =>
           if (in1.forall(known)) walk(known)(rest, locally ++ out, a :: cur, acc)
           else if (in1.forall(locally)) walk(locally)(rest, locally ++ out, List(a), cur.reverse :: acc)
           else (Some(x), s"unknown input: ${in1.filterNot(locally).mkString(", ")} $known $locally").asLeft
@@ -101,14 +101,14 @@ object parse {
         .foldLeftM(start) {
           case ((coll, acc, ms), x) =>
             val (me, res) = parse(x, false)
-            val mn = ms |+| me
+            val mn        = ms |+| me
             res match {
-              case Single(in1, out1, expr) => (coll.addSingle(expr -> x, in1, out1), acc, mn).asRight
+              case Single(in1, out1, expr)      => (coll.addSingle(expr -> x, in1, out1), acc, mn).asRight
               case MultiStart(in1, m, expr, ar) => (coll.startMultiIn(expr -> x, in1, m, ar), acc, mn).asRight
-              case MultiAdd(m, out1, idx) => (coll.addMultiOut(m, idx, out1), acc, mn).asRight
-              case Split => (Collect[(T, X), N, N, N](), coll.assocs :: acc, mn).asRight
-              case Result(_) => (x.some, "too early result").asLeft
-              case Other(_) => (x.some, "unknown expression").asLeft
+              case MultiAdd(m, out1, idx)       => (coll.addMultiOut(m, idx, out1), acc, mn).asRight
+              case Split                        => (Collect[(T, X), N, N, N](), coll.assocs :: acc, mn).asRight
+              case Result(_)                    => (x.some, "too early result").asLeft
+              case Other(_)                     => (x.some, "unknown expression").asLeft
             }
         }
         .flatMap {
@@ -125,7 +125,7 @@ object parse {
       case Nil => Left((None, "empty body"))
       case last :: restRev =>
         parse(last, true) match {
-          case (mi, Result(out)) => res(mi, out, restRev, None)
+          case (mi, Result(out))                    => res(mi, out, restRev, None)
           case (mi, MultiStart(lastIn, m, expr, 0)) => res(mi, List(m), restRev, (expr, last, lastIn, m).some)
 
           case _ => (last.some, "final statement should be result expr or call").asLeft
@@ -137,25 +137,27 @@ object parse {
     p.modApp(
       _.foldRight((p.out.toSet, List[Block[Option[T], N]]())) {
         case (block, (need, acc)) =>
-          val provides = (block: List[AssocL[T, N]]).foldMap(_.out.toSet)
-          val pass = need -- provides
+          val provides    = (block: List[AssocL[T, N]]).foldMap(_.out.toSet)
+          val pass        = need -- provides
           val mappedBlock = block.map(_.modApp(_.some))
-          val next = (block: List[AssocL[T, N]]).foldMap(_.in.toSet) ++ pass
+          val next        = (block: List[AssocL[T, N]]).foldMap(_.in.toSet) ++ pass
           (next, prependUnless(Assoc(none[T], pass.toList, pass.toList), mappedBlock, pass.isEmpty) :: acc)
       }._2
     )
 
-  def preventReuse[T, N](p: Parsed[T, N]): List[(T, N)] =
-    p.app.flatten
-      .foldLeft((p.in.toSet, Set[N](), List[(T, N)]())) {
+  def preventReuse[T, N](p: Parsed[T, N]): (List[(T, N)], List[(Option[T], N)]) = {
+    val (s, u, re) = p.app.flatten
+      .foldLeft((p.in.map(_ -> none[T]).toMap, Set[N](), List[(T, N)]())) {
         case ((seen, used, acc), Assoc(app, i, o)) =>
           (
-            seen ++ o,
+            seen ++ o.tupleRight(Some(app)),
             used ++ i,
             i.filter(used).tupleLeft(app) ::: acc
           )
       }
-      ._3
+    (re, (s -- u).toList.map(_.swap))
+
+  }
 
   //    p.modApp(
   //      _.foldRight((p.out.toSet, List[Block[Option[T], N]]())) {
@@ -169,7 +171,7 @@ object parse {
   //    )
 
   def inOuts[T, N](p: Parsed[T, N]): List[Connect[N]] = {
-    val ins = List(p.in) :: p.app.map(_.map(_.out))
+    val ins  = List(p.in) :: p.app.map(_.map(_.out))
     val outs = p.app.map(_.map(_.in)) :+ List(p.out)
     ins.zip(outs)
   }
@@ -177,7 +179,7 @@ object parse {
   def alternate[A](xs: List[A], ys: List[A]): List[A] = {
     def go(xs1: List[A], ys1: List[A], acc: List[A]): List[A] = xs1 match {
       case x :: rest => go(ys1, rest, x :: acc)
-      case Nil => acc reverse_::: ys1
+      case Nil       => acc reverse_::: ys1
     }
 
     go(xs, ys, Nil)

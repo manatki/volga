@@ -1,5 +1,6 @@
 package volga
 
+import cats.{Functor, Monoid}
 import cats.instances.list._
 import cats.instances.option._
 import cats.syntax.foldable._
@@ -9,6 +10,8 @@ import cats.syntax.option._
 
 import scala.reflect.macros.blackbox
 import scala.util.control.NonFatal
+import util.opts._
+import volga.solve.Couple
 
 class SyntaxMacro(val c: blackbox.Context) extends Unappliers {
 
@@ -19,31 +22,28 @@ class SyntaxMacro(val c: blackbox.Context) extends Unappliers {
     def res: Type
   }
 
-  case class Arrow(P: Type, res: Type) extends Mode
+  case class Arrow(P: Type, res: Type)                    extends Mode
   case class SymMon(P: Type, x: Type, I: Type, res: Type) extends Mode
 
-  def midTerm = c.freshName[TermName]("mid")
+  def midTerm  = c.freshName[TermName]("mid")
   val lastTerm = c.freshName[TermName]("last")
 
   def arr[P: WeakTypeTag, R: WeakTypeTag](body: c.Tree)(vb: Tree): c.Tree =
     generateSyntax(body, Arrow(weakTypeOf[P].typeConstructor, weakTypeOf[R]))
   def symmon[P: WeakTypeTag, x: WeakTypeTag, I: WeakTypeTag, R: WeakTypeTag](body: c.Tree)(vb: Tree): c.Tree =
-    generateSyntax(body, SymMon(
-      weakTypeOf[P].typeConstructor,
-      weakTypeOf[x].typeConstructor,
-      weakTypeOf[I],
-      weakTypeOf[R]))
+    generateSyntax(body,
+                   SymMon(weakTypeOf[P].typeConstructor, weakTypeOf[x].typeConstructor, weakTypeOf[I], weakTypeOf[R]))
 
   def namePat(n: TermName): Tree = pq"$n @ _"
 
   private def constructArrConnect(P: Type, typeMap: Map[TermName, Type])(conn: parse.Connect[TermName]): Tree = {
     val (ins, outs) = conn
-    val inpat = ins.map(names => pq"(..${names.map(namePat)})").reduce((a, b) => pq"($a, $b)")
-    val intype = ins.map(names => tq"(..${names.map(typeMap)})").reduce((a, b) => tq"($a, $b)")
-    val outres = outs.map(names => q"(..$names)").reduce((a, b) => q"($a, $b)")
-    val outtype = outs.map(names => tq"(..${names.map(typeMap)})").reduce((a, b) => tq"($a, $b)")
-    val param = c.freshName[TermName]("input")
-    val parin = q"val $param = $EmptyTree"
+    val inpat       = ins.map(names => pq"(..${names.map(namePat)})").reduce((a, b) => pq"($a, $b)")
+    val intype      = ins.map(names => tq"(..${names.map(typeMap)})").reduce((a, b) => tq"($a, $b)")
+    val outres      = outs.map(names => q"(..$names)").reduce((a, b) => q"($a, $b)")
+    val outtype     = outs.map(names => tq"(..${names.map(typeMap)})").reduce((a, b) => tq"($a, $b)")
+    val param       = c.freshName[TermName]("input")
+    val parin       = q"val $param = $EmptyTree"
     q"$syntSym.liftf[$P, $intype, $outtype] ($parin => $param match { case $inpat => $outres })"
   }
 
@@ -56,27 +56,48 @@ class SyntaxMacro(val c: blackbox.Context) extends Unappliers {
         b match {
           case q"{..$ls}" =>
             val xns = xs.collect { case ValDef(_, name, VarTyp(tt), _) => (name, tt) }.toList
-            val ps = parse.collectBody(ls.toList, xns.map(_._1), matchElem)
-            val (outTypes, parsed) = ps.fold({ case (to, x) => c.abort(to.fold(c.enclosingPosition)(_.pos), x + to.toString) }, identity)
-            val typeMap = ((lastTerm -> mode.res) +: xns ++: outTypes).toMap
+            val ps  = parse.collectBody(ls.toList, xns.map(_._1), matchElem)
+            val (outTypes, parsed) = ps.fold({
+              case (to, x) => c.abort(to.fold(c.enclosingPosition)(_.pos), x + to.toString)
+            }, identity)
+            val typeMap: Map[TermName, Type] = ((lastTerm -> mode.res) +: xns ++: outTypes).toMap
+            val withLaterUse                 = parse.addLaterUse(parsed)
             mode match {
               case Arrow(p, r) =>
-                val withLaterUse = parse.addLaterUse(parsed)
-                val connects = parse.inOuts(withLaterUse).map(constructArrConnect(p, typeMap))
-                val flow = withLaterUse.app.map(_.map(getOrPass(typeMap, p)).reduce((a, b) => q"($a.split($b))"))
-                val res = parse.alternate(connects, flow).reduce((x, y) => q"($x.andThen($y))")
+                val connects             = parse.inOuts(withLaterUse).map(constructArrConnect(p, typeMap))
+                val flow                 = withLaterUse.app.map(_.map(getOrPass(typeMap, p)).reduce((a, b) => q"($a.split($b))"))
+                val res                  = parse.alternate(connects, flow).reduce((x, y) => q"($x.andThen($y))")
                 val Assoc(body, in, out) = withLaterUse
 
                 val bodspl = body
-                  .map(_.map { case Assoc(b, DebugLst(ins), DebugLst(outs)) =>
-                    s"$outs <- ${b.getOrElse("<<REUSE>>")} -< $ins"
+                  .map(_.map {
+                    case Assoc(b, DebugLst(ins), DebugLst(outs)) =>
+                      s"$outs <- ${b.getOrElse("<<REUSE>>")} -< $ins"
                   })
                   .intercalate(List("<<BREAK>>"))
                 (res.some, res :: bodspl)
               case SymMon(p, x, i, r) =>
-                val reused = parse.preventReuse(parsed)
+                val (reused, unused) = parse.preventReuse(parsed)
                 reused.foreach { case (t, n) => c.error(t.pos, s"variable $n is used second time") }
-                c.abort(c.enclosingPosition, " monoidal syntax not implemented")
+                unused.foreach {
+                  case (t, n) => c.error(t.fold(c.enclosingPosition)(_.pos), s"variable $n is not used")
+                }
+                if (reused.nonEmpty || unused.nonEmpty) c.abort(c.enclosingPosition, "error in variable use")
+
+                implicit val typeMonoid: Monoid[Type] = new Monoid[Type] {
+                  def empty: Type                     = i
+                  def combine(x: Type, y: Type): Type = appliedType(x.typeSymbol, List(x, y))
+                }
+
+                val connects =
+                  Functor[List]
+                    .compose[Couple]
+                    .compose[List]
+                    .compose[List]
+                    .map(parse.inOuts(withLaterUse))(typeMap)
+//                    .map(parse.binTransfers[Type])
+
+                (q"null".some, connects)
             }
           case _ => (none, List(xs, b))
         }
@@ -93,14 +114,14 @@ class SyntaxMacro(val c: blackbox.Context) extends Unappliers {
 
   def matchElem[A](t: Tree, last: Boolean): (List[(TermName, Type)], ParseElem[Tree, TermName]) = t match {
     case ValDef(_, name, VarTyp(tt), ArrSyn(smth, args)) => (List(name -> tt), ParseElem.Single(args, name, smth))
-    case ValDef(_, name, VarTyp(tt), VarElem(v, i)) => (List(name -> tt), ParseElem.MultiAdd(v, name, i - 1))
+    case ValDef(_, name, VarTyp(tt), VarElem(v, i))      => (List(name -> tt), ParseElem.MultiAdd(v, name, i - 1))
     case ValDef(mods, name, tt, Match(ArrSyn(smth, args), _)) if mods.hasFlag(Flag.SYNTHETIC) =>
       val arity = tt.tpe match {
         case TypeRef(_, _, xs) => xs.length
-        case _ => 0
+        case _                 => 0
       }
       (List(), ParseElem.MultiStart(args, name, smth, arity))
-    case q"${Break()}" => (List(), ParseElem.Split)
+    case q"${Break()}"          => (List(), ParseElem.Split)
     case q"(..${Names(names)})" => (List(), ParseElem.Result(names))
     case ArrSyn(smth, args) =>
       val name = if (last) lastTerm else midTerm
@@ -116,7 +137,7 @@ trait Unappliers {
   import c.universe._
 
   val syntSym = reify(syntax).tree.symbol
-  val Vsym = typeOf[syntax.V[Unit]].typeConstructor.typeSymbol
+  val Vsym    = typeOf[syntax.V[Unit]].typeConstructor.typeSymbol
   object Syntax {
     def unapply(tree: Tree): Boolean = tree.symbol == syntSym
   }
@@ -125,7 +146,7 @@ trait Unappliers {
     def unapply(tree: Tree): Boolean =
       tree match {
         case q"${Syntax()}.----" => true
-        case _ => false
+        case _                   => false
       }
   }
 
@@ -138,8 +159,8 @@ trait Unappliers {
     def unapply(tree: Tree): Option[(Tree, List[TermName])] =
       tree match {
         case q"${Syntax()}.ArrSyn[..$_]($smth).apply[..$_](..${Names(names)})(..$_)" => Some((smth, names))
-        case q"$tree: $_" => unapply(tree)
-        case _ => None
+        case q"$tree: $_"                                                            => unapply(tree)
+        case _                                                                       => None
       }
   }
 
@@ -162,7 +183,7 @@ trait Unappliers {
         case tq"${tt: Type}" =>
           tt match {
             case TypeRef(t, Vsym, List(tp)) if t.termSymbol == syntSym => Some(tp)
-            case _ => None
+            case _                                                     => None
           }
 
         case _ => None

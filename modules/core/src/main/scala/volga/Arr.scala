@@ -1,7 +1,7 @@
 package volga
 import cats.arrow.Arrow
 
-trait Arr[->[_, _]] extends Cartesian[->, (?, ?), Unit] {
+trait Arr[->[_, _]] {
   def lift[A, B](f: A => B): A -> B
   def split[A, B, C, D](f: A -> C, g: B -> D): (A, B) -> (C, D)
   def compose[A, B, C](f: B -> C, g: A -> B): A -> C
@@ -13,7 +13,7 @@ trait Arr[->[_, _]] extends Cartesian[->, (?, ?), Unit] {
   def id[A]: A -> A                                       = lift(identity)
 
   def rmap[A, B, C](a1: A -> B)(f: B => C): A -> C = compose(lift(f), a1)
-  def lmap[A, B, C](a1: A -> B)(f: C => A): C -> B = andThen(lift(f), a1)
+  def lmap[A, B, C](a1: A -> B)(f: C => A): C -> B = compose(a1, lift(f))
 
   def product3[A, B1, B2, B3](a1: A -> B1, a2: A -> B2, a3: A -> B3): A -> (B1, B2, B3) =
     rmap(product(product(a1, a2), a3)) { case ((b1, b2), b3) => (b1, b2, b3) }
