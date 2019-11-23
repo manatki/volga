@@ -1,10 +1,15 @@
 package volga.solve
 import cats.{Applicative, Eval, Traverse}
 import cats.syntax.apply._
+import tofu.optics.PItems
+import tofu.optics.tags.{PTagApply, every}
 
-case class Couple[A](x: A, y: A)
+case class Couple[+A](x: A, y: A)
 
 object Couple {
+  implicit def everyCouple[A, B]: PTagApply[PItems, Couple[A], Couple[B], A, B, every.type, Unit] =
+    _ => PItems.fromTraverse
+
   implicit val traversable: Traverse[Couple] = new Traverse[Couple] {
     def traverse[G[_]: Applicative, A, B](fa: Couple[A])(f: A => G[B]): G[Couple[B]] =
       f(fa.x).map2(f(fa.y))(Couple(_, _))

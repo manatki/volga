@@ -3,14 +3,20 @@ package volga
 import cats.{Functor, Monoid}
 import cats.instances.list._
 import cats.instances.option._
+import cats.instances.parallel._
+import cats.instances.either._
 import cats.syntax.foldable._
 import cats.syntax.functor._
+import cats.syntax.parallel._
 import cats.syntax.traverse._
 import cats.syntax.option._
+import tofu.optics.{PItems, chain, functions}
+import tofu.optics.tags._
 
 import scala.reflect.macros.blackbox
 import scala.util.control.NonFatal
 import util.opts._
+import volga.parse.Connect
 import volga.solve.Couple
 
 class SyntaxMacro(val c: blackbox.Context) extends Unappliers {
@@ -25,14 +31,16 @@ class SyntaxMacro(val c: blackbox.Context) extends Unappliers {
   case class Arrow(P: Type, res: Type)                    extends Mode
   case class SymMon(P: Type, x: Type, I: Type, res: Type) extends Mode
 
-  def midTerm  = c.freshName[TermName]("mid")
-  val lastTerm = c.freshName[TermName]("last")
+  def midTerm  = c.freshName(TermName("mid"))
+  val lastTerm = c.freshName(TermName("last"))
 
   def arr[P: WeakTypeTag, R: WeakTypeTag](body: c.Tree)(vb: Tree): c.Tree =
     generateSyntax(body, Arrow(weakTypeOf[P].typeConstructor, weakTypeOf[R]))
   def symmon[P: WeakTypeTag, x: WeakTypeTag, I: WeakTypeTag, R: WeakTypeTag](body: c.Tree)(vb: Tree): c.Tree =
-    generateSyntax(body,
-                   SymMon(weakTypeOf[P].typeConstructor, weakTypeOf[x].typeConstructor, weakTypeOf[I], weakTypeOf[R]))
+    generateSyntax(
+      body,
+      SymMon(weakTypeOf[P].typeConstructor, weakTypeOf[x].typeConstructor, weakTypeOf[I], weakTypeOf[R])
+    )
 
   def namePat(n: TermName): Tree = pq"$n @ _"
 
@@ -42,7 +50,7 @@ class SyntaxMacro(val c: blackbox.Context) extends Unappliers {
     val intype      = ins.map(names => tq"(..${names.map(typeMap)})").reduce((a, b) => tq"($a, $b)")
     val outres      = outs.map(names => q"(..$names)").reduce((a, b) => q"($a, $b)")
     val outtype     = outs.map(names => tq"(..${names.map(typeMap)})").reduce((a, b) => tq"($a, $b)")
-    val param       = c.freshName[TermName]("input")
+    val param       = c.freshName(TermName("input"))
     val parin       = q"val $param = $EmptyTree"
     q"$syntSym.liftf[$P, $intype, $outtype] ($parin => $param match { case $inpat => $outres })"
   }
@@ -90,12 +98,9 @@ class SyntaxMacro(val c: blackbox.Context) extends Unappliers {
                 }
 
                 val connects =
-                  Functor[List]
-                    .compose[Couple]
-                    .compose[List]
-                    .compose[List]
-                    .map(parse.inOuts(withLaterUse))(typeMap)
-//                    .map(parse.binTransfers[Type])
+                  (chain.to[List[Connect[Type]]](parse.inOuts(withLaterUse)) > every > every > every > every end)
+                    .update(typeMap)
+                    .parTraverse(parse.binTransfers[Type])
 
                 (q"null".some, connects)
             }

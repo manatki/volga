@@ -1,0 +1,5 @@
+package volga
+
+object Nekote {
+
+}

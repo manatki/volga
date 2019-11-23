@@ -7,7 +7,7 @@ scalaVersion in ThisBuild := "2.13.0"
 val libs = libraryDependencies ++= List(
   "org.typelevel" %% "cats-core"         % "2.0.0-RC1" withSources(),
   "com.github.julien-truffaut" %% "monocle-macro" % "2.0.0-RC1" withSources(),
-  "ru.tinkoff"    %% "tofu-optics-macro" % "0.2.0" withSources(),
+  "ru.tinkoff"    %% "tofu-optics-macro" % "0.5.2" withSources(),
 )
 
 val testLibs = libraryDependencies ++= List(
@@ -35,5 +35,6 @@ scalacOptions in ThisBuild ++=
   List(
     "-Ymacro-annotations",
     "-language:higherKinds",
+    "-language:postfixOps",
     "-deprecation"
   )

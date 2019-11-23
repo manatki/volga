@@ -1,7 +1,7 @@
 package volga
 
 import cats.Functor
-import cats.data.StateT
+import cats.data.{EitherNel, StateT}
 import cats.instances.either._
 import cats.instances.list._
 import cats.instances.set._
@@ -16,6 +16,7 @@ import monocle.PLens
 import monocle.function.all._
 import monocle.macros.{Lenses, PLenses}
 import monocle.syntax.apply._
+import volga.solve.{Bin, BinRes}
 
 import scala.annotation.tailrec
 
@@ -30,8 +31,10 @@ object Assoc {
 }
 
 @Lenses
-final case class Collect[A, M, I, O](singles: List[Either[M, Assoc[A, List[I], List[O]]]] = Nil,
-                                     multis: Map[M, Assoc[A, List[I], Vector[Option[O]]]] = Map.empty[M, Nothing]) {
+final case class Collect[A, M, I, O](
+    singles: List[Either[M, Assoc[A, List[I], List[O]]]] = Nil,
+    multis: Map[M, Assoc[A, List[I], Vector[Option[O]]]] = Map.empty[M, Nothing]
+) {
   private def add(s: Either[M, Assoc[A, List[I], List[O]]]) =
     this &|-> Collect.singles modify (s :: _)
 
@@ -76,10 +79,12 @@ object parse {
   private def prependUnless[A](xs: A, xss: List[A], p: Boolean): List[A] = if (p) xss else xs :: xss
 
   def splitUsage[T, N, X](body: Body[(T, X), N], in: List[N]): Result[X, Body[(T, X), N]] = {
-    @tailrec def walk(known: Set[N])(items: Block[(T, X), N],
-                                     locally: Set[N] = known,
-                                     cur: Block[(T, X), N] = List(),
-                                     acc: Body[(T, X), N] = List()): Result[X, (Set[N], Body[(T, X), N])] =
+    @tailrec def walk(known: Set[N])(
+        items: Block[(T, X), N],
+        locally: Set[N] = known,
+        cur: Block[(T, X), N] = List(),
+        acc: Body[(T, X), N] = List()
+    ): Result[X, (Set[N], Body[(T, X), N])] =
       items match {
         case Nil => (locally, prependUnless(cur.reverse, acc, cur.isEmpty).reverse).asRight
         case (a @ Assoc((t, x), in1, out)) :: rest =>
@@ -91,9 +96,11 @@ object parse {
     (body: List[List[AssocL[(T, X), N]]]).flatTraverse(assocs => StateT(walk(_: Set[N])(assocs))).runA(in.toSet)
   }
 
-  def collectBody[T, N, X, M: Monoid](xs: List[X],
-                                      in: List[N],
-                                      parse: (X, Boolean) => (M, ParseElem[T, N])): Result[X, (M, Parsed[T, N])] = {
+  def collectBody[T, N, X, M: Monoid](
+      xs: List[X],
+      in: List[N],
+      parse: (X, Boolean) => (M, ParseElem[T, N])
+  ): Result[X, (M, Parsed[T, N])] = {
     def res(mi: M, out: List[N], restRev: List[X], last: Option[(T, X, List[N], N)]): Result[X, (M, Parsed[T, N])] = {
       val start = (Collect(): Collect[(T, X), N, N, N], Nil: Body[(T, X), N], mi)
 
@@ -156,8 +163,19 @@ object parse {
           )
       }
     (re, (s -- u).toList.map(_.swap))
-
   }
+
+  private def listToBin[N](elems: List[Bin[N]]): Bin[N] = elems.reduceOption(Bin.Branch(_, _)).getOrElse(Bin.Bud)
+
+  private def portsToBin[N](ports: Ports[N]): Bin[N] =
+    listToBin(ports.map(xs => listToBin(xs.map[Bin[N]](Bin.Leaf(_)))))
+
+  def binTransfers[N: Monoid](xs: Connect[N]): EitherNel[String, BinRes[N]] =
+    xs match {
+      case (from, to) =>
+        val fromBin = portsToBin(from)
+        fromBin.adaptation(portsToBin(to)).map(BinRes(fromBin).modAll).toEitherNel
+    }
 
   //    p.modApp(
   //      _.foldRight((p.out.toSet, List[Block[Option[T], N]]())) {
