@@ -162,7 +162,8 @@ object parse {
             i.filter(used).tupleLeft(app) ::: acc
           )
       }
-    (re, (s -- u).toList.map(_.swap))
+    val output = p.app.lastOption.toList.flatten.flatMap(_.out)
+    (re, (s -- u -- output).toList.map(_.swap))
   }
 
   private def listToBin[N](elems: List[Bin[N]]): Bin[N] = elems.reduceOption(Bin.Branch(_, _)).getOrElse(Bin.Bud)

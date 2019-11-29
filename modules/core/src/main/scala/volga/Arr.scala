@@ -1,14 +1,28 @@
 package volga
 import cats.arrow.Arrow
+import simulacrum.{op, typeclass}
 
-trait Arr[->[_, _]] {
+@typeclass
+trait ArrLike[->[_, _]]
+
+@typeclass
+trait Arr[->[_, _]] extends ArrLike[->] {
   def lift[A, B](f: A => B): A -> B
+  @op("***", alias = true)
   def split[A, B, C, D](f: A -> C, g: B -> D): (A, B) -> (C, D)
+
+  @op("<<<", alias = true)
   def compose[A, B, C](f: B -> C, g: A -> B): A -> C
+
+  @op(">>>", alias = true)
+  def andThen[A, B, C](f: A -> B, g: B -> C): A -> C = compose(g, f)
 
   def proj1[A, B]: (A, B) -> A                            = lift(_._1)
   def proj2[A, B]: (A, B) -> B                            = lift(_._2)
+
+  @op("&&&", alias = true)
   def product[A, B, C](f: A -> B, g: A -> C): A -> (B, C) = compose(split(f, g), lift(a => (a, a)))
+
   def term[A]: A -> Unit                                  = lift(_ => ())
   def id[A]: A -> A                                       = lift(identity)
 

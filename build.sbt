@@ -8,6 +8,7 @@ val libs = libraryDependencies ++= List(
   "org.typelevel" %% "cats-core"         % "2.0.0-RC1" withSources(),
   "com.github.julien-truffaut" %% "monocle-macro" % "2.0.0-RC1" withSources(),
   "ru.tinkoff"    %% "tofu-optics-macro" % "0.5.2" withSources(),
+   "org.typelevel" %% "simulacrum" % "1.0.0",
 )
 
 val testLibs = libraryDependencies ++= List(
@@ -27,14 +28,16 @@ val macroDeps = List(
   scalacOptions += "-language:experimental.macros"
 )
 
-lazy val core    = (project in file("modules/core")).settings(plugins, libs, testLibs)
-lazy val macros  = (project in file("modules/macros")).settings(macroDeps, plugins).dependsOn(core)
-lazy val rebuild = (project in file("modules/rebuild")).settings(libs, plugins).dependsOn(core, macros)
-
-scalacOptions in ThisBuild ++=
+val options = scalacOptions in ThisBuild ++=
   List(
     "-Ymacro-annotations",
     "-language:higherKinds",
     "-language:postfixOps",
     "-deprecation"
   )
+
+lazy val core    = (project in file("modules/core")).settings(options, plugins, libs, testLibs)
+lazy val macros  = (project in file("modules/macros")).settings(options, macroDeps, plugins).dependsOn(core)
+lazy val rebuild = (project in file("modules/rebuild")).settings(options, libs, plugins).dependsOn(core, macros)
+
+

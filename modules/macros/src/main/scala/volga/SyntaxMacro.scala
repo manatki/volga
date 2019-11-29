@@ -18,6 +18,7 @@ import scala.util.control.NonFatal
 import util.opts._
 import volga.parse.Connect
 import volga.solve.Couple
+import syntax.comp
 
 class SyntaxMacro(val c: blackbox.Context) extends Unappliers {
 
@@ -86,6 +87,7 @@ class SyntaxMacro(val c: blackbox.Context) extends Unappliers {
                 (res.some, res :: bodspl)
               case SymMon(p, x, i, r) =>
                 val (reused, unused) = parse.preventReuse(parsed)
+                c.info(c.enclosingPosition, parsed.toString, true)
                 reused.foreach { case (t, n) => c.error(t.pos, s"variable $n is used second time") }
                 unused.foreach {
                   case (t, n) => c.error(t.fold(c.enclosingPosition)(_.pos), s"variable $n is not used")
@@ -101,8 +103,9 @@ class SyntaxMacro(val c: blackbox.Context) extends Unappliers {
                   (chain.to[List[Connect[Type]]](parse.inOuts(withLaterUse)) > every > every > every > every end)
                     .update(typeMap)
                     .parTraverse(parse.binTransfers[Type])
+                    .fold(_.toList, identity)
 
-                (q"null".some, connects)
+                (None, connects)
             }
           case _ => (none, List(xs, b))
         }
@@ -141,8 +144,8 @@ trait Unappliers {
 
   import c.universe._
 
-  val syntSym = reify(syntax).tree.symbol
-  val Vsym    = typeOf[syntax.V[Unit]].typeConstructor.typeSymbol
+  val syntSym = reify(comp).tree.symbol
+  val Vsym    = typeOf[comp.V[Unit]].typeConstructor.typeSymbol
   object Syntax {
     def unapply(tree: Tree): Boolean = tree.symbol == syntSym
   }
@@ -163,9 +166,10 @@ trait Unappliers {
   object ArrSyn {
     def unapply(tree: Tree): Option[(Tree, List[TermName])] =
       tree match {
-        case q"${Syntax()}.ArrSyn[..$_]($smth).apply[..$_](..${Names(names)})(..$_)" => Some((smth, names))
-        case q"$tree: $_"                                                            => unapply(tree)
-        case _                                                                       => None
+        case q"${Syntax()}.ArrSyn[..$_]($smth)(..$_).apply[..$_](..${Names(names)})(..$_)" => Some((smth, names))
+        case q"${Syntax()}.SMCSyn[..$_]($smth)(..$_).apply[..$_](..${Names(names)})(..$_)" => Some((smth, names))
+        case q"$tree: $_"                                                                  => unapply(tree)
+        case _                                                                             => None
       }
   }
 

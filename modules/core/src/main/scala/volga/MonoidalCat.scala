@@ -2,6 +2,7 @@ package volga
 
 import cats.arrow.Category
 
+
 trait Cat[->[_, _]] {
   def id[A]: A -> A
   def compose[A, B, C](f: B -> C, g: A -> B): A -> C
@@ -14,7 +15,9 @@ trait Cat[->[_, _]] {
   }
 }
 
-trait SemigropalCat[->[_, _], x[_, _]] extends Cat[->] {
+trait SemCatLike[->[_, _], x[_, _]]
+
+trait SemigropalCat[->[_, _], x[_, _]] extends Cat[->] with SemCatLike[->, x] {
   def assocl[A, B, C]: (A x (B x C)) -> ((A x B) x C)
   def assocr[A, B, C]: ((A x B) x C) -> (A x (B x C))
 
@@ -25,7 +28,9 @@ trait SemigropalCat[->[_, _], x[_, _]] extends Cat[->] {
   }
 }
 
-trait MonoidalCat[->[_, _], x[_, _], I] extends SemigropalCat[->, x] {
+trait MonCatLike[->[_, _], x[_, _], I] extends SemCatLike[->, x]
+
+trait MonoidalCat[->[_, _], x[_, _], I] extends SemigropalCat[->, x] with MonCatLike[->, x, I]{
   def lunit[A]: (I x A) -> A
   def unitl[A]: A -> (I x A)
   def runit[A]: (A x I) -> A

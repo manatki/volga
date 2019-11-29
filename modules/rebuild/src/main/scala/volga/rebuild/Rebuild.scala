@@ -5,7 +5,7 @@ import cats.syntax.functor._
 import cats.syntax.apply._
 import volga.rebuild.Rebuild.Identity
 
-trait Rebuild[F[+ _], -A, +B] { self =>
+trait Rebuild[F[_], A, B] { self =>
   type I
   def build(a: A)(implicit F: Monad[F]): F[(I, B)]
   def rebuild(a: A, refresh: Boolean, mid: I)(implicit F: Monad[F]): F[(I, B, Boolean)]
@@ -54,7 +54,7 @@ trait Rebuild[F[+ _], -A, +B] { self =>
   def rmap[C](f: B => C): Rebuild[F, A, C] = bimap[A, C](identity)(f)
 }
 
-trait LiftedRebuild[F[+ _], -A, +B] extends Rebuild[F, A, B] with (A => B) {
+trait LiftedRebuild[F[_], A, B] extends Rebuild[F, A, B] with (A => B) { self =>
   def apply(a: A): B
   type I = Unit
   def build(a: A)(implicit F: Monad[F]): F[(Unit, B)] = F.pure(((), apply(a)))
@@ -65,6 +65,20 @@ trait LiftedRebuild[F[+ _], -A, +B] extends Rebuild[F, A, B] with (A => B) {
     case lifted: LiftedRebuild[F, B, C] => Rebuild.lift[F]((a: A) => lifted(apply(a)))
     case _                              => g.lmap(this)
   }
+
+  override def split[C, D](that: Rebuild[F, C, D]): Rebuild[F, (A, C), (B, D)] = that match {
+    case lifted: LiftedRebuild[F, C, D] => Rebuild.lift[F] { case (a, c) => (apply(a), lifted(c)) }
+    case _ =>
+      new Rebuild[F, (A, C), (B, D)] {
+        type I = that.I
+
+        def build(ac: (A, C))(implicit F: Monad[F]): F[(I, (B, D))] =
+          that.build(ac._2).map { case (i, d) => (i, (self(ac._1), d)) }
+
+        def rebuild(ac: (A, C), refresh: Boolean, mid: I)(implicit F: Monad[F]): F[(I, (B, D), Boolean)] =
+          that.rebuild(ac._2, refresh, mid).map { case (next, d, re) => (next, (self(ac._1), d), re) }
+      }
+  }
 }
 
 object Rebuild {
@@ -73,11 +87,11 @@ object Rebuild {
     def apply(x: Any) = x
   }
 
-  def id[F[+ _], A]: Rebuild[F, A, A] = Identity.asInstanceOf[Rebuild[F, A, A]]
+  def id[F[_], A]: Rebuild[F, A, A] = Identity.asInstanceOf[Rebuild[F, A, A]]
 
-  def lift[F[+ _]] = new MkLift[F](true)
+  def lift[F[_]] = new MkLift[F](true)
 
-  class MkLift[F[+ _]](val dummy: Boolean) extends AnyVal {
+  class MkLift[F[_]](val dummy: Boolean) extends AnyVal {
     def apply[A, B](f: LiftedRebuild[F, A, B]): Rebuild[F, A, B] = f
   }
 

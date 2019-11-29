@@ -4,8 +4,7 @@ import cats.arrow.Arrow
 import cats.{Applicative, Monad, StackSafeMonad}
 import cats.syntax.flatMap._
 import cats.syntax.functor._
-import cats.syntax.arrow._
-import cats.syntax.compose._
+import volga.syntax.arr._
 
 import scala.Function.tupled
 import scala.io.StdIn
@@ -13,17 +12,15 @@ import scala.io.StdIn
 sealed trait ConsoleM[X]
 
 object ConsoleM {
-  case class Pure[A](x: A) extends ConsoleM[A]
-  case class Bind[A, B](x: ConsoleM[A], fab: A => ConsoleM[B])
-      extends ConsoleM[B]
-  case object GetLine           extends ConsoleM[String]
-  case class PutLine(s: String) extends ConsoleM[Unit]
+  case class Pure[A](x: A)                                     extends ConsoleM[A]
+  case class Bind[A, B](x: ConsoleM[A], fab: A => ConsoleM[B]) extends ConsoleM[B]
+  case object GetLine                                          extends ConsoleM[String]
+  case class PutLine(s: String)                                extends ConsoleM[Unit]
 
   implicit val monad: Monad[ConsoleM] =
     new StackSafeMonad[ConsoleM] {
-      def pure[A](x: A): ConsoleM[A] = Pure(x)
-      def flatMap[A, B](fa: ConsoleM[A])(
-          f: A => ConsoleM[B]): ConsoleM[B] = Bind(fa, f)
+      def pure[A](x: A): ConsoleM[A]                                       = Pure(x)
+      def flatMap[A, B](fa: ConsoleM[A])(f: A => ConsoleM[B]): ConsoleM[B] = Bind(fa, f)
     }
 
   val getLine: ConsoleM[String] = GetLine
@@ -42,17 +39,15 @@ object ConsoleM {
 sealed trait ConsoleA[X]
 
 object ConsoleA {
-  case class Pure[A](x: A) extends ConsoleA[A]
-  case class Ap[A, B](f: ConsoleA[A => B], x: ConsoleA[A])
-      extends ConsoleA[B]
-  case object GetLine           extends ConsoleA[String]
-  case class PutLine(s: String) extends ConsoleA[Unit]
+  case class Pure[A](x: A)                                 extends ConsoleA[A]
+  case class Ap[A, B](f: ConsoleA[A => B], x: ConsoleA[A]) extends ConsoleA[B]
+  case object GetLine                                      extends ConsoleA[String]
+  case class PutLine(s: String)                            extends ConsoleA[Unit]
 
   implicit val applicative: Applicative[ConsoleA] =
     new Applicative[ConsoleA] {
-      def pure[A](x: A): ConsoleA[A] = Pure(x)
-      def ap[A, B](ff: ConsoleA[A => B])(
-          fa: ConsoleA[A]): ConsoleA[B] = Ap(ff, fa)
+      def pure[A](x: A): ConsoleA[A]                                   = Pure(x)
+      def ap[A, B](ff: ConsoleA[A => B])(fa: ConsoleA[A]): ConsoleA[B] = Ap(ff, fa)
     }
 
   def countGets[X](ca: ConsoleA[X]): Int = ca match {
@@ -68,34 +63,29 @@ object ConsoleA {
 sealed trait ConsoleArr[X, Y]
 
 object ConsoleArr extends App {
-  case class Lift[A, B](f: A => B) extends ConsoleArr[A, B]
-  case class AndThen[A, B, C](start: ConsoleArr[A, B],
-                              next: ConsoleArr[B, C])
-      extends ConsoleArr[A, C]
-  case class Split[A, B, C, D](first: ConsoleArr[A, B],
-                               second: ConsoleArr[C, D])
-      extends ConsoleArr[(A, C), (B, D)]
-  case object GetLine extends ConsoleArr[Unit, String]
-  case object PutLine extends ConsoleArr[String, Unit]
+  case class Lift[A, B](f: A => B)                                                extends ConsoleArr[A, B]
+  case class AndThen[A, B, C](start: ConsoleArr[A, B], next: ConsoleArr[B, C])    extends ConsoleArr[A, C]
+  case class Split[A, B, C, D](first: ConsoleArr[A, B], second: ConsoleArr[C, D]) extends ConsoleArr[(A, C), (B, D)]
+  case object GetLine                                                             extends ConsoleArr[Unit, String]
+  case object PutLine                                                             extends ConsoleArr[String, Unit]
 
-  implicit val arrow: Arrow[ConsoleArr] =
-    new Arrow[ConsoleArr] {
+  implicit val arrow: volga.Arr[ConsoleArr] =
+    new volga.Arr[ConsoleArr] {
       def lift[A, B](f: A => B): ConsoleArr[A, B] = Lift(f)
-      def first[A, B, C](
-          fa: ConsoleArr[A, B]): ConsoleArr[(A, C), (B, C)] =
-        Split(fa, id)
-      def compose[A, B, C](
-          f: ConsoleArr[B, C],
-          g: ConsoleArr[A, B]): ConsoleArr[A, C] = AndThen(g, f)
+
+
+      def split[A, B, C, D](f: ConsoleArr[A, C], g: ConsoleArr[B, D]): ConsoleArr[(A, B), (C, D)] = Split(f, g)
+
+      def compose[A, B, C](f: ConsoleArr[B, C], g: ConsoleArr[A, B]): ConsoleArr[A, C] = AndThen(g, f)
     }
 
   val getLine: ConsoleArr[Unit, String] = GetLine
   val putLine: ConsoleArr[String, Unit] = PutLine
 
-  val concat: ConsoleArr[(String, String), String] = Lift(
-    tupled(_ + _))
-  val show: ConsoleArr[Int, String]     = Lift(_.toString)
-  val plus: ConsoleArr[(Int, Int), Int] = Lift(tupled(_ + _))
+  val concat: ConsoleArr[(String, String), String] = Lift(tupled(_ + _))
+  val show: ConsoleArr[Int, String]                = Lift(_.toString)
+  val plus: ConsoleArr[(Int, Int), Int]            = Lift(tupled(_ + _))
+  val divMod: ConsoleArr[(Int, Int), (Int, Int)]   = Lift { case (x, y) => (x / y, x % y) }
 
   def echo2: ConsoleArr[Unit, Unit] =
     (getLine &&& getLine) >>> concat >>> putLine
@@ -111,8 +101,8 @@ object ConsoleArr extends App {
       case PutLine => 0
     }
 
-  import volga.syntax._
-  import volga.syntax
+  import volga.syntax.comp._
+  import volga.syntax.comp
 
   def echo2s: ConsoleArr[Unit, Unit] = arr[ConsoleArr] { () =>
     val s1 = getLine()
@@ -121,70 +111,54 @@ object ConsoleArr extends App {
     putLine(s)
   }
 
-  val foo: ConsoleArr[(Int, Int), Unit] = arr[ConsoleArr] {
-    (x, y) =>
-      val xs = show(x)
-      val ys = show(y)
-      putLine(xs)
-      putLine(ys)
-      val z  = plus(x, y)
-      val zs = show(z)
-      val s = concat(xs, ys)
-      val t = concat(zs, s)
-      putLine(zs)
-      putLine(s)
-      putLine(t)
+  val console = arr[ConsoleArr]
+
+  val foo: ConsoleArr[(Int, Int), (Int, String)] = console { (x, y) =>
+    val xs = show(x)
+    val ys = show(y)
+    putLine(xs)
+    putLine(ys)
+    val (u, v) = divMod(x, y)
+    val z      = plus(u, v)
+    val zs     = show(z)
+    val s      = concat(xs, ys)
+    val t      = concat(zs, s)
+    putLine(zs)
+    (v, t)
   }
 
-  run(foo)(1, 2)
+  run(foo)(11, 3)
 
-  liftf[volga.pres.ConsoleArr,
-        (Int, Int),
-        (((Int, Int), Int), Int)] {
+  liftf[volga.pres.ConsoleArr, (Int, Int), (((Int, Int), Int), Int)] {
     case (x, y) => (((x, y), x), y)
   }.andThen(ident[volga.pres.ConsoleArr, (Int, Int)]
       .split(show)
       .split(show))
-    .andThen(
-      syntax.liftf[volga.pres.ConsoleArr,
-                   (((Int, Int), String), String),
-                   ((String, Int, Int, String), String)] {
-        case (((x, y), xs), ys) => ((ys, x, y, xs), xs)
-      })
-    .andThen(ident[volga.pres.ConsoleArr,
-                   (String, Int, Int, String)].split(putLine))
-    .andThen(
-      syntax.liftf[volga.pres.ConsoleArr,
-                   ((String, Int, Int, String), Unit),
-                   (((String, String), String), (Int, Int))] {
+    .andThen(comp.liftf[volga.pres.ConsoleArr, (((Int, Int), String), String), ((String, Int, Int, String), String)] {
+      case (((x, y), xs), ys) => ((ys, x, y, xs), xs)
+    })
+    .andThen(ident[volga.pres.ConsoleArr, (String, Int, Int, String)].split(putLine))
+    .andThen(comp
+      .liftf[volga.pres.ConsoleArr, ((String, Int, Int, String), Unit), (((String, String), String), (Int, Int))] {
         case ((ys, x, y, xs), ()) => (((xs, ys), ys), (x, y))
       })
     .andThen(ident[volga.pres.ConsoleArr, (String, String)]
       .split(putLine)
       .split(plus))
-    .andThen(syntax.liftf[volga.pres.ConsoleArr,
-                          (((String, String), Unit), Int),
-                          ((String, String), Int)] {
+    .andThen(comp.liftf[volga.pres.ConsoleArr, (((String, String), Unit), Int), ((String, String), Int)] {
       case (((xs, ys), ()), z) => ((xs, ys), z)
     })
     .andThen(ident[volga.pres.ConsoleArr, (String, String)]
       .split(show))
-    .andThen(syntax.liftf[volga.pres.ConsoleArr,
-                          ((String, String), String),
-                          (String, (String, String))] {
+    .andThen(comp.liftf[volga.pres.ConsoleArr, ((String, String), String), (String, (String, String))] {
       case ((xs, ys), zs) => (zs, (xs, ys))
     })
     .andThen(ident[volga.pres.ConsoleArr, String].split(concat))
-    .andThen(
-      syntax.liftf[volga.pres.ConsoleArr,
-                   (String, String),
-                   (((String, String), String), String)] {
-        case (zs, s) => (((zs, s), zs), s)
-      })
+    .andThen(comp.liftf[volga.pres.ConsoleArr, (String, String), (((String, String), String), String)] {
+      case (zs, s) => (((zs, s), zs), s)
+    })
     .andThen(concat.split(putLine).split(putLine))
-    .andThen(syntax.liftf[volga.pres.ConsoleArr,
-                          ((String, Unit), Unit),
-                          String] {
+    .andThen(comp.liftf[volga.pres.ConsoleArr, ((String, Unit), Unit), String] {
       case ((t, ()), ()) => t
     })
     .andThen(putLine)
