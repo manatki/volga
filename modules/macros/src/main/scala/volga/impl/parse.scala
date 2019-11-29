@@ -1,4 +1,4 @@
-package volga
+package volga.impl
 
 import cats.Functor
 import cats.data.{EitherNel, StateT}
@@ -16,7 +16,7 @@ import monocle.PLens
 import monocle.function.all._
 import monocle.macros.{Lenses, PLenses}
 import monocle.syntax.apply._
-import volga.solve.{Bin, BinRes}
+import volga.solve.{Bin, BinRes, PMagma}
 
 import scala.annotation.tailrec
 
@@ -171,7 +171,7 @@ object parse {
   private def portsToBin[N](ports: Ports[N]): Bin[N] =
     listToBin(ports.map(xs => listToBin(xs.map[Bin[N]](Bin.Leaf(_)))))
 
-  def binTransfers[N: Monoid](xs: Connect[N]): EitherNel[String, BinRes[N]] =
+  def binTransfers[N: PMagma](xs: Connect[N]): EitherNel[String, BinRes[N]] =
     xs match {
       case (from, to) =>
         val fromBin = portsToBin(from)

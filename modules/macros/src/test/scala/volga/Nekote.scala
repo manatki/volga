@@ -36,11 +36,22 @@ object Nekote  extends App{
 
   val trace = symon[Trace, Combo, Dummy.type]
 
-  val test1: Trace[Int Combo Int, Double] = trace { (a: V[Int], b: V[Int]) =>
+  def test2: Trace[Combo[Int, Int], Double] = trace { (a: V[Int], b: V[Int]) =>
     val x = intToString(a)
-    val y = intToString(b)
+    ----
+    val y: V[String] = intToString(b)
     val r = concat(x, y)
 
     stringToDouble(r)
+  }
+
+  val test3: Trace[Combo[Combo[Int, Int], Int], Double] = trace { (a: V[Int], b: V[Int], c: V[Int]) =>
+    val x1 = intToString(c)
+    val x2 = intToString(a)
+    val x3 = intToString(b)
+    val x4 = concat(x1, x2)
+    val x5 = concat(x4, x3)
+
+    stringToDouble(x5)
   }
 }

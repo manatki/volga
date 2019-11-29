@@ -5,6 +5,7 @@ import cats.data.Kleisli
 import syntax.comp._
 import cats.instances.list._
 import cats.syntax.compose._
+import syntax.cat._
 import syntax.arr._
 
 import scala.Function.tupled

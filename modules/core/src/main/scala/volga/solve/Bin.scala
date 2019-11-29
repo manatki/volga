@@ -9,7 +9,7 @@ import cats.syntax.either._
 import cats.syntax.foldable._
 import cats.syntax.functor._
 import cats.syntax.monad._
-import cats.syntax.monoid._
+import PMagma.ops._
 import cats.syntax.option._
 import cats.syntax.show._
 import cats.{Applicative, Eval, Functor, Monoid, Show, Traverse}
@@ -372,24 +372,24 @@ sealed abstract class BinRes[+A] {
 object BinRes {
   type History[+A] = Vector[BinHistory[A]]
 
-  def apply[A: Monoid](bin: Bin[A]): BinRes[A] = bin match {
+  def apply[A: PMagma](bin: Bin[A]): BinRes[A] = bin match {
     case Leaf(a)      => LeafRes(a)
     case Branch(l, r) => BinRes(l) branch BinRes(r)
-    case Bud          => LeafRes(Monoid.empty[A])
+    case Bud          => LeafRes(PMagma[A].empty)
   }
 
-  implicit class Binaops[A: Monoid](val b: BinRes[A]) {
+  implicit class Binaops[A: PMagma](val b: BinRes[A]) {
     def branch(c: BinRes[A]): BinRes[A] = c match {
-      case FailRes(v, h, ls) => FailRes(b.value |+| c.value, h, ls)
-      case _                 => BranchRes(b, c, b.value |+| c.value, Vector())
+      case FailRes(v, h, ls) => FailRes(b.value ## c.value, h, ls)
+      case _                 => BranchRes(b, c, b.value ## c.value, Vector())
     }
 
     def modAll(ops: Vector[BinOp]): BinRes[A] = ops.foldLeft(b)(_ mod _)
 
     def mod(op: BinOp): BinRes[A] =
       op match {
-        case Grow(L) => LeafRes(Monoid.empty[A]) branch b withHistory (b, HGrow(L, b.value))
-        case Grow(R) => b branch LeafRes(Monoid.empty[A]) withHistory (b, HGrow(R, b.value))
+        case Grow(L) => LeafRes(PMagma[A].empty) branch b withHistory (b, HGrow(L, b.value))
+        case Grow(R) => b branch LeafRes(PMagma[A].empty) withHistory (b, HGrow(R, b.value))
         case _ =>
           b.ifBranch(op)((l, r) =>
             op match {

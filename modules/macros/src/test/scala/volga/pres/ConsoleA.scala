@@ -5,6 +5,7 @@ import cats.{Applicative, Monad, StackSafeMonad}
 import cats.syntax.flatMap._
 import cats.syntax.functor._
 import volga.syntax.arr._
+import volga.syntax.cat._
 
 import scala.Function.tupled
 import scala.io.StdIn

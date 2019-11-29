@@ -1,6 +1,8 @@
 package volga
 package syntax
 
+import volga.impl.SyntaxMacro
+
 object comp {
   class V[X]
 
@@ -13,7 +15,7 @@ object comp {
 
   def symon[↦[_, _], ⊗[_, _], I] = new MkSyMon[↦, ⊗, I]
 
-  def ident[P[_, _], A](implicit arr: Arr[P]): P[A, A]                                   = arr.id
+  def ident[P[_, _], A](implicit arr: Identity[P]): P[A, A]                              = arr.id
   def liftf[P[_, _], A, B](f: A => B)(implicit arr: Arr[P]): P[A, B]                     = arr.lift(f)
   def liftf2[P[_, _], A1, A2, B](f: (A1, A2) => B)(implicit arr: Arr[P]): P[(A1, A2), B] = arr.lift(f.tupled)
 

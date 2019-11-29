@@ -1,11 +1,16 @@
 package volga
 
 import cats.arrow.Category
+import simulacrum.{op, typeclass}
 
-
-trait Cat[->[_, _]] {
+@typeclass
+trait Cat[->[_, _]] extends Identity[->] {
   def id[A]: A -> A
+
+  @op("<<<", alias = true)
   def compose[A, B, C](f: B -> C, g: A -> B): A -> C
+
+  @op(">>>", alias = true)
   def andThen[A, B, C](f: A -> B, g: B -> C): A -> C =
     compose(g, f)
 
@@ -23,6 +28,8 @@ trait SemigropalCat[->[_, _], x[_, _]] extends Cat[->] with SemCatLike[->, x] {
 
   def tensor[A, B, C, D](f: A -> B, g: C -> D): (A x C) -> (B x D)
 
+  def split[A, B, C, D](f: A -> B, g: C -> D): (A x C) -> (B x D) = tensor(f, g)
+
   implicit class SemiCatOps[A, B](f: A -> B) {
     def x[C, D](g: C -> D): (A x C) -> (B x D) = tensor(f, g)
   }
@@ -30,7 +37,7 @@ trait SemigropalCat[->[_, _], x[_, _]] extends Cat[->] with SemCatLike[->, x] {
 
 trait MonCatLike[->[_, _], x[_, _], I] extends SemCatLike[->, x]
 
-trait MonoidalCat[->[_, _], x[_, _], I] extends SemigropalCat[->, x] with MonCatLike[->, x, I]{
+trait MonoidalCat[->[_, _], x[_, _], I] extends SemigropalCat[->, x] with MonCatLike[->, x, I] {
   def lunit[A]: (I x A) -> A
   def unitl[A]: A -> (I x A)
   def runit[A]: (A x I) -> A
