@@ -65,7 +65,6 @@ object ParseElem {
 }
 
 object parse {
-
   import ParseElem._
 
   type AssocL[T, N] = Assoc[T, List[N], List[N]]
@@ -199,6 +198,16 @@ object parse {
     def go(xs1: List[A], ys1: List[A], acc: List[A]): List[A] = xs1 match {
       case x :: rest => go(ys1, rest, x :: acc)
       case Nil       => acc reverse_::: ys1
+    }
+
+    go(xs, ys, Nil)
+  }
+
+  def alternateOpt[A](xs: List[Option[A]], ys: List[Option[A]]): List[A] = {
+    def go(xs1: List[Option[A]], ys1: List[Option[A]], acc: List[A]): List[A] = xs1 match {
+      case Some(x) :: rest => go(ys1, rest, x :: acc)
+      case None :: rest    => go(ys1, rest, acc)
+      case Nil             => acc reverse_::: ys1.flatten
     }
 
     go(xs, ys, Nil)

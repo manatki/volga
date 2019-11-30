@@ -2,6 +2,8 @@ package volga
 
 
 import volga.syntax.comp._
+import volga.syntax.symmon._
+import volga.syntax.cat._
 
 final abstract class Combo[+A, +B]
 case object Dummy
@@ -36,6 +38,15 @@ object Nekote  extends App{
 
   val trace = symon[Trace, Combo, Dummy.type]
 
+  def test1: Trace[Combo[Int, Int], Double] = trace { (a: V[Int], b: V[Int]) =>
+    val x = intToString(a)
+    val y: V[String] = intToString(b)
+    val r = concat(x, y)
+
+    stringToDouble(r)
+  }
+//  println(test1)
+
   def test2: Trace[Combo[Int, Int], Double] = trace { (a: V[Int], b: V[Int]) =>
     val x = intToString(a)
     ----
@@ -45,7 +56,9 @@ object Nekote  extends App{
     stringToDouble(r)
   }
 
-  val test3: Trace[Combo[Combo[Int, Int], Int], Double] = trace { (a: V[Int], b: V[Int], c: V[Int]) =>
+//  println(test2)
+
+  def test3: Trace[Combo[Combo[Int, Int], Int], Double] = trace { (a: V[Int], b: V[Int], c: V[Int]) =>
     val x1 = intToString(c)
     val x2 = intToString(a)
     val x3 = intToString(b)
@@ -54,4 +67,6 @@ object Nekote  extends App{
 
     stringToDouble(x5)
   }
+
+  println(test3)
 }

@@ -2,13 +2,14 @@ name := "volga"
 
 version := "0.1"
 
-scalaVersion in ThisBuild := "2.13.0"
+scalaVersion in ThisBuild := "2.13.1"
 
 val libs = libraryDependencies ++= List(
-  "org.typelevel" %% "cats-core"         % "2.0.0-RC1" withSources(),
-  "com.github.julien-truffaut" %% "monocle-macro" % "2.0.0-RC1" withSources(),
-  "ru.tinkoff"    %% "tofu-optics-macro" % "0.5.2" withSources(),
-   "org.typelevel" %% "simulacrum" % "1.0.0",
+  "org.typelevel"              %% "cats-core"         % "2.0.0",
+  "com.github.julien-truffaut" %% "monocle-macro"     % "2.0.0",
+  "ru.tinkoff"                 %% "tofu-optics-macro" % "0.5.5",
+  "ru.tinkoff"                 %% "tofu-core"         % "0.5.5",
+  "org.typelevel"              %% "simulacrum"        % "1.0.0",
 )
 
 val testLibs = libraryDependencies ++= List(
@@ -28,7 +29,7 @@ val macroDeps = List(
   scalacOptions += "-language:experimental.macros"
 )
 
-val options = scalacOptions in ThisBuild ++=
+val options = scalacOptions ++=
   List(
     "-Ymacro-annotations",
     "-language:higherKinds",
@@ -40,4 +41,4 @@ lazy val core    = (project in file("modules/core")).settings(options, plugins, 
 lazy val macros  = (project in file("modules/macros")).settings(options, macroDeps, plugins).dependsOn(core)
 lazy val rebuild = (project in file("modules/rebuild")).settings(options, libs, plugins).dependsOn(core, macros)
 
-
+lazy val volga = project.in(file(".")).aggregate(core, macros, core)

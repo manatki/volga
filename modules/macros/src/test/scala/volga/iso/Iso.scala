@@ -13,7 +13,7 @@ trait Iso[A, B] { self =>
 }
 
 object Iso {
-  implicit val symon: Symon[Iso, (?, ?), Unit] = new Symon[Iso, (?, ?), Unit] {
+  implicit val symon: Symon[Iso, (*, *), Unit] = new Symon[Iso, (*, *), Unit] {
     def swap[A, B]: Iso[(A, B), (B, A)] = new Iso[(A, B), (B, A)] {
       def to(a: (A, B)): (B, A)   = a.swap
       def from(b: (B, A)): (A, B) = b.swap
