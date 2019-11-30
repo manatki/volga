@@ -40,7 +40,7 @@ object Permutations {
     val xset = xs.toSet
     val yset = ys.toSet
 
-    "xs has non unique elements".leftNel.whenA(xset.size != xs.size) &>
+    s"xs has non unique elements $xs".leftNel.whenA(xset.size != xs.size) &>
       "ys has non unique elements".leftNel.whenA(yset.size != ys.size) &>
       s"xs and ys has different sizes: ${xs.size}, ${ys.size}".leftNel.whenA(xs.size != ys.size) &>
       s"xs and ys contain different elements : ${(xset -- yset) ++ (yset -- xset)}".leftNel.whenA(xset != yset) map

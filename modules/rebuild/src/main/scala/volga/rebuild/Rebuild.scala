@@ -5,7 +5,7 @@ import cats.syntax.functor._
 import cats.syntax.apply._
 import volga.rebuild.Rebuild.Identity
 
-trait Rebuild[F[+ _], -A, +B] { self =>
+trait Rebuild[F[_], A, B] { self =>
   type I
   def build(a: A)(implicit F: Monad[F]): F[(I, B)]
   def rebuild(a: A, refresh: Boolean, mid: I)(implicit F: Monad[F]): F[(I, B, Boolean)]
@@ -30,11 +30,6 @@ trait Rebuild[F[+ _], -A, +B] { self =>
     }
 
   def split[C, D](that: Rebuild[F, C, D]): Rebuild[F, (A, C), (B, D)] =
-    that match {
-      case _:IdRebuild => that.split(self).bimap(_.swap)(_.swap)
-    }
-
-
     new Rebuild[F, (A, C), (B, D)] {
       type I = (self.I, that.I)
       def build(ac: (A, C))(implicit F: Monad[F]): F[(I, (B, D))] =
@@ -59,7 +54,7 @@ trait Rebuild[F[+ _], -A, +B] { self =>
   def rmap[C](f: B => C): Rebuild[F, A, C] = bimap[A, C](identity)(f)
 }
 
-trait LiftedRebuild[F[+ _], -A, +B] extends Rebuild[F, A, B] with (A => B) {
+trait LiftedRebuild[F[_], A, B] extends Rebuild[F, A, B] with (A => B) { self =>
   def apply(a: A): B
   type I = Unit
   def build(a: A)(implicit F: Monad[F]): F[(Unit, B)] = F.pure(((), apply(a)))
@@ -70,39 +65,33 @@ trait LiftedRebuild[F[+ _], -A, +B] extends Rebuild[F, A, B] with (A => B) {
     case lifted: LiftedRebuild[F, B, C] => Rebuild.lift[F]((a: A) => lifted(apply(a)))
     case _                              => g.lmap(this)
   }
+
+  override def split[C, D](that: Rebuild[F, C, D]): Rebuild[F, (A, C), (B, D)] = that match {
+    case lifted: LiftedRebuild[F, C, D] => Rebuild.lift[F] { case (a, c) => (apply(a), lifted(c)) }
+    case _ =>
+      new Rebuild[F, (A, C), (B, D)] {
+        type I = that.I
+
+        def build(ac: (A, C))(implicit F: Monad[F]): F[(I, (B, D))] =
+          that.build(ac._2).map { case (i, d) => (i, (self(ac._1), d)) }
+
+        def rebuild(ac: (A, C), refresh: Boolean, mid: I)(implicit F: Monad[F]): F[(I, (B, D), Boolean)] =
+          that.rebuild(ac._2, refresh, mid).map { case (next, d, re) => (next, (self(ac._1), d), re) }
+      }
+  }
 }
 
 object Rebuild {
   type AnyK[+A] <: Any
-  private abstract class IdRebuild[F[+_], C, D] extends Rebuild[F, C, D]{
-    def revSplit[A, B](self: Rebuild[F, A, B])
-  }
-  private case object Identity extends IdRebuild[AnyK, Any, Any] {
-    type I = Any
-    def build(a: Any)(implicit F: Monad[AnyK]): AnyK[(Any, Any)] = F.pure((Unit, a))
-    def rebuild(a: Any, refresh: Boolean, mid: Identity.I)(implicit F: Monad[AnyK]): AnyK[(Any, Any, Boolean)] =
-      F.pure((Unit, a, refresh))
-    override def compose[C](that: Rebuild[AnyK, Any, C]): Rebuild[AnyK, Any, C] = that
-    override def bimap[C, D](f: C => Any)(g: Any => D): Rebuild[AnyK, C, D]     = lift[AnyK](c => g(f(c)))
-    override def split[C, D](that: Rebuild[AnyK, C, D]): Rebuild[AnyK, (Any, C), (Any, D)] =
-      new Rebuild[AnyK, (Any, C), (Any, D)] {
-        type I = that.I
-        def build(a: (Any, C))(implicit F: Monad[AnyK]): AnyK[(I, (Any, D))] = F.map(that.build(a._2)) {
-          case (i, a) => (i, ((), a))
-        }
-        def rebuild(a: (Any, C), refresh: Boolean, mid: that.I)(
-            implicit F: Monad[AnyK]): AnyK[(that.I, (Any, D), Boolean)] =
-          F.map(that.rebuild(a._2, refresh, mid)) {
-            case (i, b, r) => (i, ((), b), r)
-          }
-      }
+  private case object Identity extends LiftedRebuild[AnyK, Any, Any] {
+    def apply(x: Any) = x
   }
 
-  def id[F[+ _], A]: Rebuild[F, A, A] = Identity.asInstanceOf[Rebuild[F, A, A]]
+  def id[F[_], A]: Rebuild[F, A, A] = Identity.asInstanceOf[Rebuild[F, A, A]]
 
-  def lift[F[+ _]] = new MkLift[F](true)
+  def lift[F[_]] = new MkLift[F](true)
 
-  class MkLift[F[+ _]](val dummy: Boolean) extends AnyVal {
+  class MkLift[F[_]](val dummy: Boolean) extends AnyVal {
     def apply[A, B](f: LiftedRebuild[F, A, B]): Rebuild[F, A, B] = f
   }
 

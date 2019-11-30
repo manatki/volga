@@ -1,31 +1,27 @@
 package volga
 
-import cats.arrow.Category
+trait SemCatLike[->[_, _], x[_, _]]
 
-trait Cat[->[_, _]] {
-  def id[A]: A -> A
-  def compose[A, B, C](f: B -> C, g: A -> B): A -> C
-  def andThen[A, B, C](f: A -> B, g: B -> C): A -> C =
-    compose(g, f)
+trait SemigropalCat[->[_, _], x[_, _]] extends Cat[->] with SemCatLike[->, x] {
+  type Tensor[a, b] = a x b
 
-  implicit class CatOps[A, B](f: A -> B) {
-    def o[C](g: C -> A): C -> B  = compose(f, g)
-    def >>[C](g: B -> C): A -> C = compose(g, f)
-  }
-}
-
-trait SemigropalCat[->[_, _], x[_, _]] extends Cat[->] {
   def assocl[A, B, C]: (A x (B x C)) -> ((A x B) x C)
   def assocr[A, B, C]: ((A x B) x C) -> (A x (B x C))
 
   def tensor[A, B, C, D](f: A -> B, g: C -> D): (A x C) -> (B x D)
+
+  def split[A, B, C, D](f: A -> B, g: C -> D): (A x C) -> (B x D) = tensor(f, g)
 
   implicit class SemiCatOps[A, B](f: A -> B) {
     def x[C, D](g: C -> D): (A x C) -> (B x D) = tensor(f, g)
   }
 }
 
-trait MonoidalCat[->[_, _], x[_, _], I] extends SemigropalCat[->, x] {
+trait MonCatLike[->[_, _], x[_, _], I] extends SemCatLike[->, x]
+
+trait MonoidalCat[->[_, _], x[_, _], I] extends SemigropalCat[->, x] with MonCatLike[->, x, I] {
+  type One = I
+
   def lunit[A]: (I x A) -> A
   def unitl[A]: A -> (I x A)
   def runit[A]: (A x I) -> A
@@ -41,7 +37,6 @@ trait Sym[->[_, _], x[_, _]] extends SemigropalCat[->, x] {
       assocl >>
       (swap[C, B] x id[A]) >>
       swap
-
 }
 
 trait Symon[->[_, _], x[_, _], I] extends Sym[->, x] with MonoidalCat[->, x, I] {
@@ -122,7 +117,6 @@ trait Bicartesian[->[_, _], x[_, _], I, :+[_, _], O] extends Cartesian[->, x, I]
   implicit class BicatOps[A, B](f: A -> B) {
     def +[C, D](g: C -> D): (A :+ C) -> (B :+ D) = choose(f, g)
   }
-
 }
 
 trait DistributiveCat[->[_, _], x[_, _], I, :+[_, _], O] extends Bicartesian[->, x, I, :+, O] {

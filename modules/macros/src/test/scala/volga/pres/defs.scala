@@ -68,10 +68,7 @@ trait MonoidalCat[->[_, _], x[_, _], I] extends Cat[->] {
       ar[A, I, B] === ((right_unit[A].to x id[B]) >> (id[A] x left_unit[
         B].from))
 
-    def tenson_dist[A, B, C, D, E, F](f: A -> B,
-                                      g: B -> C,
-                                      h: D -> E,
-                                      i: E -> F) =
+    def tenson_dist[A, B, C, D, E, F](f: A -> B, g: B -> C, h: D -> E, i: E -> F) =
       ((f x h) >> (g x i)) === ((f >> g) x (h >> i))
 
     def tensor_id[A, B] = (id[A] x id[B]) === id[A x B]
@@ -82,8 +79,7 @@ trait MonoidalCat[->[_, _], x[_, _], I] extends Cat[->] {
   }
 }
 
-trait Symon[->[_, _], x[_, _], I]
-    extends MonoidalCat[->, x, I] {
+trait Symon[->[_, _], x[_, _], I] extends MonoidalCat[->, x, I] {
   def swap[A, B]: (A x B) -> (B x A)
 
   def symmetry[A, B]: (A x B) <-> (B x A) = <->(swap, swap)
@@ -100,8 +96,7 @@ trait Symon[->[_, _], x[_, _], I]
   }
 }
 
-trait Closed[->[_, _], x[_, _], ==>[_, _], I]
-    extends Symon[->, x, I] {
+trait Closed[->[_, _], x[_, _], ==>[_, _], I] extends Symon[->, x, I] {
   def lcurry[A, B, C](p: (A x B) -> C): A -> (B ==> C)
   def luncurry[A, B, C](p: A -> (B ==> C)): (A x B) -> C
 
@@ -143,10 +138,8 @@ trait Cartesian[->[_, _], x[_, _], I] extends Symon[->, x, I] {
     <->(proj1[A, I], product(id, term))
   def assoc[A, B, C]: (A x (B x C)) <-> ((A x B) x C) =
     <->(
-      product(product(proj1, compose(proj1[B, C], proj2)),
-              compose(proj2[B, C], proj2)),
-      product(compose(proj1[A, B], proj1),
-              product(compose(proj2[A, B], proj1), proj2))
+      product(product(proj1, compose(proj1[B, C], proj2)), compose(proj2[B, C], proj2)),
+      product(compose(proj1[A, B], proj1), product(compose(proj2[A, B], proj1), proj2))
     )
 
   def swap[A, B]: (A x B) -> (B x A) = product(proj2, proj1)
@@ -191,4 +184,26 @@ trait MonoidSMC[A, ->[_, _], x[_, _], I] {
 trait ComonoidSMC[A, ->[_, _], x[_, _], I] {
   def drop: A -> I
   def duplicate: A -> (A x A)
+}
+object popo {
+  trait Monad[F[_]] {
+    def pure[A](a: A): F[A]
+
+    def flatMap[A, B](a: A)(f: A => F[B]): F[B]
+  }
+}
+
+object symondef {
+  trait Symon[->[_, _], x[_, _], I] {
+    def id[A]: A -> A
+    def compose[A, B, C](f: B -> C, g: A -> B): A -> C
+    def tensor[A, B, C, D](f: A -> C, g: B -> D): (A x B) -> (C x D)
+    def assocl[A, B, C]: (A x (B x C)) -> ((A x B) x C)
+    def assocr[A, B, C]: ((A x B) x C) -> (A x (B x C))
+    def swap[A, B]: (A x B) -> (B x A)
+    def lunit[A]: (I x A) -> A
+    def unitl[A]: A -> (I x A)
+    def runit[A]: (A x I) -> A
+    def unitr[A]: A -> (A x I)
+  }
 }

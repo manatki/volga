@@ -1,19 +1,34 @@
 package volga
 import cats.arrow.Arrow
+import simulacrum.{op, typeclass}
 
-trait Arr[->[_, _]] extends Cartesian[->, (?, ?), Unit] {
+@typeclass
+trait ArrLike[->[_, _]]
+
+@typeclass
+trait Identity[->[_, _]] {
+  def id[A]: A -> A
+
+}
+
+@typeclass
+trait Arr[->[_, _]] extends Cat[->] with ArrLike[->] {
   def lift[A, B](f: A => B): A -> B
+  @op("***", alias = true)
   def split[A, B, C, D](f: A -> C, g: B -> D): (A, B) -> (C, D)
-  def compose[A, B, C](f: B -> C, g: A -> B): A -> C
 
-  def proj1[A, B]: (A, B) -> A                            = lift(_._1)
-  def proj2[A, B]: (A, B) -> B                            = lift(_._2)
+
+  def proj1[A, B]: (A, B) -> A = lift(_._1)
+  def proj2[A, B]: (A, B) -> B = lift(_._2)
+
+  @op("&&&", alias = true)
   def product[A, B, C](f: A -> B, g: A -> C): A -> (B, C) = compose(split(f, g), lift(a => (a, a)))
-  def term[A]: A -> Unit                                  = lift(_ => ())
-  def id[A]: A -> A                                       = lift(identity)
+
+  def term[A]: A -> Unit     = lift(_ => ())
+  override def id[A]: A -> A = lift(identity)
 
   def rmap[A, B, C](a1: A -> B)(f: B => C): A -> C = compose(lift(f), a1)
-  def lmap[A, B, C](a1: A -> B)(f: C => A): C -> B = andThen(lift(f), a1)
+  def lmap[A, B, C](a1: A -> B)(f: C => A): C -> B = compose(a1, lift(f))
 
   def product3[A, B1, B2, B3](a1: A -> B1, a2: A -> B2, a3: A -> B3): A -> (B1, B2, B3) =
     rmap(product(product(a1, a2), a3)) { case ((b1, b2), b3) => (b1, b2, b3) }
