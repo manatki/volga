@@ -86,7 +86,7 @@ class SyntaxMacro(val c: blackbox.Context) extends Unappliers {
         val HChain(rstart, rend, rhistory) = rc
         val ltree                          = constructSMCConnectOrId(lhistory, lend)
         val rtee                           = constructSMCConnectOrId(rhistory, rend)
-        q"$smc.split[$lstart, $lend, $rstart, $rend]($ltree, $rtee)"
+        q"$ltree.split($rtee)"
 
       case BinHistory.HConsume(L, v) => q"$smc.lunit[$v]"
       case BinHistory.HConsume(R, v) => q"$smc.runit[$v]"
@@ -164,10 +164,12 @@ class SyntaxMacro(val c: blackbox.Context) extends Unappliers {
     val sss = debug.mkString("\n")
     val res = resOpt.getOrElse(q"null")
     c.info(c.enclosingPosition, res.toString(), true)
-    q"""
-       println($sss)
-       $res
-      """
+//    q"""
+//       println($sss)
+//       $res
+//      """
+
+    res
   }
 
   def reportConnectErrors(xs: NonEmptyList[String]): Nothing = c.abort(c.enclosingPosition, "there were errors")

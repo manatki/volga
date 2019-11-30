@@ -1,6 +1,5 @@
 package volga
 
-
 import volga.syntax.comp._
 import volga.syntax.symmon._
 import volga.syntax.cat._
@@ -31,42 +30,57 @@ object Trace {
   }
 }
 
-object Nekote  extends App{
-  val intToString: Trace[Int, String]       = Named("intToString")
-  val stringToDouble: Trace[String, Double] = Named("stringToDouble")
-  val concat: Trace[String Combo String, String] = Named("concat")
+object Nekote {
+  def main(args: Array[String]) =  {
+    val intToString: Trace[Int, String]              = Named("intToString")
+    val stringToDouble: Trace[String, Double]        = Named("stringToDouble")
+    val concat: Trace[String Combo String, String]   = Named("concat")
+    val separate: Trace[String, String Combo String] = Named("separate")
 
-  val trace = symon[Trace, Combo, Dummy.type]
+    val trace = symon[Trace, Combo, Dummy.type]
 
-  def test1: Trace[Combo[Int, Int], Double] = trace { (a: V[Int], b: V[Int]) =>
-    val x = intToString(a)
-    val y: V[String] = intToString(b)
-    val r = concat(x, y)
+    def test1: Trace[Combo[Int, Int], Double] = trace { (a: V[Int], b: V[Int]) =>
+      val x = intToString(a)
+      val y = intToString(b)
+      val r = concat(x, y)
 
-    stringToDouble(r)
+      stringToDouble(r)
+    }
+    //  println(test1)
+
+    def test2: Trace[Combo[Int, Int], Double] = trace { (a: V[Int], b: V[Int]) =>
+      val x = intToString(a)
+      ----
+      val y: V[String] = intToString(b)
+      val r            = concat(x, y)
+
+      stringToDouble(r)
+    }
+
+    //  println(test2)
+
+    def test3 = trace { (a: V[Int], b: V[Int], c: V[Int]) =>
+      val x1 = intToString(c)
+      val x2 = intToString(a)
+      val x3 = intToString(b)
+      val x4 = concat(x1, x2)
+      val x5 = concat(x4, x3)
+
+      stringToDouble(x5)
+    }
+
+    //  println(test3)
+
+    def test4 = trace { (a: V[String], b: V[String]) =>
+      val (x1, x2) = separate(a)
+      val (x3, x4) = separate(b)
+
+      val y1 = concat(x1, x3)
+      val y2 = concat(x2, x4)
+
+      concat(y1, y2)
+    }
+
+    println(test4)
   }
-//  println(test1)
-
-  def test2: Trace[Combo[Int, Int], Double] = trace { (a: V[Int], b: V[Int]) =>
-    val x = intToString(a)
-    ----
-    val y: V[String] = intToString(b)
-    val r = concat(x, y)
-
-    stringToDouble(r)
-  }
-
-//  println(test2)
-
-  def test3: Trace[Combo[Combo[Int, Int], Int], Double] = trace { (a: V[Int], b: V[Int], c: V[Int]) =>
-    val x1 = intToString(c)
-    val x2 = intToString(a)
-    val x3 = intToString(b)
-    val x4 = concat(x1, x2)
-    val x5 = concat(x4, x3)
-
-    stringToDouble(x5)
-  }
-
-  println(test3)
 }
