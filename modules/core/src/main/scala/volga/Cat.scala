@@ -10,7 +10,7 @@ trait Cat[->[_, _]] extends Identity[->] {
   def compose[A, B, C](f: B -> C, g: A -> B): A -> C
 
   @op(">>>", alias = true)
-  def andThen[A, B, C](f: A -> B, g: B -> C): A -> C =
+  def andThen[A, B, C](f: A -> B)(g: B -> C): A -> C =
     compose(g, f)
 
   implicit class CatOps[A, B](f: A -> B) {
@@ -18,4 +18,3 @@ trait Cat[->[_, _]] extends Identity[->] {
     def >>[C](g: B -> C): A -> C = compose(g, f)
   }
 }
-

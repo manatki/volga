@@ -1,11 +1,12 @@
 package volga.pres
 
-import cats.arrow.Arrow
-import cats.{Applicative, Monad, StackSafeMonad}
 import cats.syntax.flatMap._
 import cats.syntax.functor._
+import cats.{Applicative, Monad, StackSafeMonad}
 import volga.syntax.arr._
 import volga.syntax.cat._
+import cats.syntax.apply._
+import cats.syntax.semigroupal._
 
 import scala.Function.tupled
 import scala.io.StdIn
@@ -24,10 +25,15 @@ object ConsoleM {
       def flatMap[A, B](fa: ConsoleM[A])(f: A => ConsoleM[B]): ConsoleM[B] = Bind(fa, f)
     }
 
-  val getLine: ConsoleM[String] = GetLine
+  val getLine: ConsoleM[String]          = GetLine
+  def putLine(s: String): ConsoleM[Unit] = PutLine(s)
 
   def echo2: ConsoleM[Unit] =
-    for (x <- getLine; y <- getLine) yield x + y
+    for {
+      x <- getLine
+      y <- getLine
+      _ <- putLine(x + y)
+    } yield x + y
 
   def countGets[A](cm: ConsoleM[A]): Int = cm match {
     case Pure(_)    => 0
@@ -51,6 +57,9 @@ object ConsoleA {
       def ap[A, B](ff: ConsoleA[A => B])(fa: ConsoleA[A]): ConsoleA[B] = Ap(ff, fa)
     }
 
+  val getLine: ConsoleA[String]          = GetLine
+  def putLine(s: String): ConsoleA[Unit] = PutLine(s)
+
   def countGets[X](ca: ConsoleA[X]): Int = ca match {
     case Pure(_)    => 0
     case GetLine    => 1
@@ -58,7 +67,10 @@ object ConsoleA {
     case Ap(f, x)   => countGets(f) + countGets(x)
   }
 
-  def echo2: ConsoleA[Unit] = ???
+  def echo2: ConsoleA[Unit] = {
+    val start = (getLine, getLine).tupled
+    putLine(???)
+  }
 }
 
 sealed trait ConsoleArr[X, Y]
@@ -73,7 +85,6 @@ object ConsoleArr extends App {
   implicit val arrow: volga.Arr[ConsoleArr] =
     new volga.Arr[ConsoleArr] {
       def lift[A, B](f: A => B): ConsoleArr[A, B] = Lift(f)
-
 
       def split[A, B, C, D](f: ConsoleArr[A, C], g: ConsoleArr[B, D]): ConsoleArr[(A, B), (C, D)] = Split(f, g)
 
@@ -102,8 +113,8 @@ object ConsoleArr extends App {
       case PutLine => 0
     }
 
-  import volga.syntax.comp._
   import volga.syntax.comp
+  import volga.syntax.comp._
 
   def echo2s: ConsoleArr[Unit, Unit] = arr[ConsoleArr] { () =>
     val s1 = getLine()
@@ -132,25 +143,33 @@ object ConsoleArr extends App {
 
   liftf[volga.pres.ConsoleArr, (Int, Int), (((Int, Int), Int), Int)] {
     case (x, y) => (((x, y), x), y)
-  }.andThen(ident[volga.pres.ConsoleArr, (Int, Int)]
-      .split(show)
-      .split(show))
+  }.andThen(
+      ident[volga.pres.ConsoleArr, (Int, Int)]
+        .split(show)
+        .split(show)
+    )
     .andThen(comp.liftf[volga.pres.ConsoleArr, (((Int, Int), String), String), ((String, Int, Int, String), String)] {
       case (((x, y), xs), ys) => ((ys, x, y, xs), xs)
     })
     .andThen(ident[volga.pres.ConsoleArr, (String, Int, Int, String)].split(putLine))
-    .andThen(comp
-      .liftf[volga.pres.ConsoleArr, ((String, Int, Int, String), Unit), (((String, String), String), (Int, Int))] {
-        case ((ys, x, y, xs), ()) => (((xs, ys), ys), (x, y))
-      })
-    .andThen(ident[volga.pres.ConsoleArr, (String, String)]
-      .split(putLine)
-      .split(plus))
+    .andThen(
+      comp
+        .liftf[volga.pres.ConsoleArr, ((String, Int, Int, String), Unit), (((String, String), String), (Int, Int))] {
+          case ((ys, x, y, xs), ()) => (((xs, ys), ys), (x, y))
+        }
+    )
+    .andThen(
+      ident[volga.pres.ConsoleArr, (String, String)]
+        .split(putLine)
+        .split(plus)
+    )
     .andThen(comp.liftf[volga.pres.ConsoleArr, (((String, String), Unit), Int), ((String, String), Int)] {
       case (((xs, ys), ()), z) => ((xs, ys), z)
     })
-    .andThen(ident[volga.pres.ConsoleArr, (String, String)]
-      .split(show))
+    .andThen(
+      ident[volga.pres.ConsoleArr, (String, String)]
+        .split(show)
+    )
     .andThen(comp.liftf[volga.pres.ConsoleArr, ((String, String), String), (String, (String, String))] {
       case ((xs, ys), zs) => (zs, (xs, ys))
     })
@@ -180,9 +199,6 @@ object ConsoleArr extends App {
         StdIn.readLine()
       }
       case AndThen(f, g) =>
-        x =>
-          run(g)(run(f)(x))
-
+        x => run(g)(run(f)(x))
     }
-
 }
