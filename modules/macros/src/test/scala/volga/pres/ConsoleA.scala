@@ -1,4 +1,5 @@
-package volga.pres
+package volga
+package pres
 
 import cats.syntax.flatMap._
 import cats.syntax.functor._
@@ -82,8 +83,7 @@ object ConsoleArr extends App {
   case object GetLine                                                             extends ConsoleArr[Unit, String]
   case object PutLine                                                             extends ConsoleArr[String, Unit]
 
-  implicit val arrow: volga.Arr[ConsoleArr] =
-    new volga.Arr[ConsoleArr] {
+  implicit val arrow: Arr[ConsoleArr] = new Arr[ConsoleArr] {
       def lift[A, B](f: A => B): ConsoleArr[A, B] = Lift(f)
 
       def split[A, B, C, D](f: ConsoleArr[A, C], g: ConsoleArr[B, D]): ConsoleArr[(A, B), (C, D)] = Split(f, g)

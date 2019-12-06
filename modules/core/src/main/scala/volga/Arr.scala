@@ -1,5 +1,5 @@
 package volga
-import cats.arrow.Arrow
+import cats.arrow.{Arrow, ArrowChoice}
 import simulacrum.{op, typeclass}
 
 @typeclass
@@ -23,7 +23,7 @@ trait Arr[->[_, _]] extends Cat[->] with ArrLike[->] {
   def product[A, B, C](f: A -> B, g: A -> C): A -> (B, C) = compose(split(f, g), lift(a => (a, a)))
 
   def term[A]: A -> Unit     = lift(_ => ())
-  override def id[A]: A -> A = lift(identity)
+  def id[A]: A -> A = lift(identity)
 
   def rmap[A, B, C](a1: A -> B)(f: B => C): A -> C = compose(lift(f), a1)
   def lmap[A, B, C](a1: A -> B)(f: C => A): C -> B = compose(a1, lift(f))
@@ -85,6 +85,16 @@ trait ArrChoice[->[_, _]] extends Arr[->] {
     choose(lift(identity[C]))(fab)
 }
 
+object ArrChoice{
+  implicit def fromCats[->[_, _]](implicit arr: ArrowChoice[->]): ArrChoice[->] =
+    new ArrChoice[->] {
+      def lift[A, B](f: A => B): A -> B                             = arr.lift(f)
+      def split[A, B, C, D](f: A -> C, g: B -> D): (A, B) -> (C, D) = arr.split(f, g)
+      def compose[A, B, C](f: B -> C, g: A -> B): A -> C            = arr.compose(f, g)
+      def choose[A, B, C, D](f: A -> C)(g: B -> D): Either[A, B] -> Either[C, D] = ???
+    }
+}
+
 @typeclass trait ArrPlus[->[_, _]] extends Arr[->] {
   @op(">+<", alias = true)
   def plus[A, B](f: A -> B, g: A -> B): A -> B
@@ -98,4 +108,8 @@ trait ArrChoice[->[_, _]] extends Arr[->] {
       case Left(a)  => ((), rmap[Unit, C, Either[C, D]](lmap[A, C, Unit](f)(_ => a))(Left(_)))
       case Right(b) => ((), rmap[Unit, D, Either[C, D]](lmap[B, D, Unit](g)(_ => b))(Right(_)))
     })(app)
+}
+
+@typeclass trait ArrCoapply[->[_, _]] extends ArrChoice[->]{
+
 }
