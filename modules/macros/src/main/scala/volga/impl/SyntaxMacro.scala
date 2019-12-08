@@ -164,12 +164,12 @@ class SyntaxMacro(val c: blackbox.Context) extends Unappliers {
     val sss = debug.mkString("\n")
     val res = resOpt.getOrElse(q"null")
     c.info(c.enclosingPosition, res.toString(), true)
-//    q"""
-//       println($sss)
-//       $res
-//      """
+    q"""
+       println($sss)
+       $res
+      """
 
-    res
+//    res
   }
 
   def reportConnectErrors(xs: NonEmptyList[String]): Nothing = c.abort(c.enclosingPosition, "there were errors")

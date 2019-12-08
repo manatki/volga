@@ -15,6 +15,7 @@ import cats.instances.either._
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import tofu.syntax.monadic._
+import volga.syntax.comp
 
 import scala.util.Try
 import scala.util.matching.Regex
@@ -50,7 +51,7 @@ object Dikleisli {
       }
   }
 
-  implicit def symmon[F[_]: MPar.TC: Monad, G[_]: MPar.TC: Monad]: DikleisliSymon[F, G] = new DikleisliSymon[F, G]
+  implicit def instance[F[_]: MPar.TC: Monad, G[_]: MPar.TC: Monad]: DikleisliSymon[F, G] = new DikleisliSymon[F, G]
 
   class DikleisliSymon[F[_]: MPar.TC: Monad, G[_]: MPar.TC: Monad] extends Symon[Dikleisli[F, G, *, *], (*, *), Unit] {
     @inline private def lifted[A, B](f: A => B)(g: B => A): Dikleisli[F, G, A, B] = lift[F, G](f)(g)
@@ -81,7 +82,9 @@ object Dikleisli {
   }
 }
 
-object Parsing  {
+object Parsing {
+  implicit val parsingSMC: Symon[Parsing, (*, *), Unit] = Dikleisli.instance
+
   type Parsing[A, B] = Dikleisli[EitherNel[String, *], Id, A, B]
 
   def lift[A, B] = Dikleisli.lift[Either[String, *], Id]
@@ -98,7 +101,7 @@ object Parsing  {
         }
     ) { case (s1, s2) => s"$s1$sep$s2" }
 
-  def readInt: Parsing[String, Int] =
+  val readInt: Parsing[String, Int] =
     Dikleisli((s: String) => s.toIntOption.toRightNel(s"$s is not an int"))((_: Int).toString: Id[String])
 
   val date: Parsing[((Int, Int), Int), LocalDate] =
@@ -111,18 +114,53 @@ object Parsing  {
   import volga.syntax.cat._
   import volga.syntax.symmon._
 
-  val parsing = symon[Parsing, (*, *), Unit]
+  val parsing = symon[Parsing, Tuple2, Unit]
 
-  val parseDate: Parsing[String, LocalDate] = parsing { (s: V[String]) =>
-    val (dayStr, monthDay)  = sep(".")(s)
-    val (monthStr, yearStr) = sep(".")(monthDay)
+  val parseDate1: Parsing[String, LocalDate] = parsing { (s: V[String]) =>
+    val (dayStr: V[String], monthYear: V[String]) = SMCSyn(sep(".")).apply(s)
+    val (monthStr: V[String], yearStr: V[String]) = SMCSyn(sep(".")).apply(monthYear)
     ----
-    val day   = readInt(dayStr)
-    val month = readInt(monthStr)
-    val year  = readInt(yearStr)
+    val year: V[Int] = SMCSyn(readInt).apply(yearStr)
+    val month: V[Int] = SMCSyn(readInt).apply(monthStr)
+    val day: V[Int] = SMCSyn(readInt).apply(dayStr)
 
-    date(day, month, year)
+    SMCSyn(date).apply(day, month, year)
   }
+
+  val parseDate0: Parsing[String, LocalDate] = sep(".")
+    .andThen(ident[Parsing, String].split(sep(".")))
+    .andThen(parsingSMC.assocl[String, String, String])
+    .andThen(readInt.split(readInt).split(readInt))
+    .andThen(
+      parsingSMC
+        .assocr[Int, Int, Int]
+        .andThen(parsingSMC.assocl[Int, Int, Int])
+    )
+    .andThen(date)
+
+  val parseDate: Parsing[String, LocalDate] = sep(".")
+    .andThen(ident[Parsing, String].split(sep(".")))
+    .andThen(
+      parsingSMC
+        .assocl[String, String, String]
+        .andThen(parsingSMC.swap[String, String].split(ident[Parsing, String]))
+        .andThen(parsingSMC.assocr[String, String, String])
+        .andThen(ident[Parsing, String].split(parsingSMC.swap[String, String]))
+        .andThen(parsingSMC.assocl[String, String, String])
+        .andThen(parsingSMC.swap[String, String].split(ident[Parsing, String]))
+    )
+    .andThen(readInt.split(readInt).split(readInt))
+    .andThen(
+      parsingSMC
+        .assocr[Int, Int, Int]
+        .andThen(parsingSMC.assocl[Int, Int, Int])
+        .andThen(parsingSMC.swap[Int, Int].split(ident[Parsing, Int]))
+        .andThen(parsingSMC.assocr[Int, Int, Int])
+        .andThen(ident[Parsing, Int].split(parsingSMC.swap[Int, Int]))
+        .andThen(parsingSMC.assocl[Int, Int, Int])
+        .andThen(parsingSMC.swap[Int, Int].split(ident[Parsing, Int]))
+    )
+    .andThen(date)
 
   def main(args: Array[String]): Unit = {
     val today = parseDate.from(LocalDate.now())
