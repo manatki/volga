@@ -18,7 +18,7 @@ import volga.solve.BinHistory.HChain
 import volga.solve.{BinHistory, BinOp, BinRes, PMagma}
 import volga.syntax.comp
 
-import scala.reflect.macros.blackbox
+import scala.reflect.macros.{TypecheckException, blackbox}
 import scala.util.control.NonFatal
 
 class SyntaxMacro(val c: blackbox.Context) extends Unappliers {
@@ -29,8 +29,10 @@ class SyntaxMacro(val c: blackbox.Context) extends Unappliers {
     def res: Type
 
     def combineType(xs: List[Type]): Tree = this match {
-      case Arrow(_, _)        => tq"(..$xs)"
-      case SymMon(_, x, _, _) => xs.map(x => tq"$x").reduceLeft((a, b) => tq"$x[$a, $b]")
+      case Arrow(_, _) => tq"(..$xs)"
+      case SymMon(_, x, _, _) =>
+        val resT = xs.reduceLeft((a, b) => appliedType(x, List(a, b)))
+        tq"$resT"
     }
 
     def ident(t: Tree): Tree = q"$compS.ident[$P, $t]"
@@ -76,22 +78,22 @@ class SyntaxMacro(val c: blackbox.Context) extends Unappliers {
     import BinOp.{L, R}
     value match {
       case BinHistory.HRotate(L, l, m, r) =>
-        q"$smc.assocl[$l, $m, $r]"
+        c.typecheck(q"$smc.assocl[$l, $m, $r]")
       case BinHistory.HRotate(R, l, m, r) =>
-        q"$smc.assocr[$l, $m, $r]"
+        c.typecheck(q"$smc.assocr[$l, $m, $r]")
       case BinHistory.HSwap(l, r) =>
-        q"$smc.swap[$l, $r]"
+        c.typecheck(q"$smc.swap[$l, $r]")
       case BinHistory.HSplit(lc, rc) =>
         val HChain(lstart, lend, lhistory) = lc
         val HChain(rstart, rend, rhistory) = rc
         val ltree                          = constructSMCConnectOrId(lhistory, lend)
         val rtee                           = constructSMCConnectOrId(rhistory, rend)
-        q"$smc.split[$lstart, $lend, $rstart, $rend]($ltree, $rtee)"
+        c.typecheck(q"""$ltree.split($rtee)""")
 
-      case BinHistory.HConsume(L, v) => q"$smc.lunit[$v]"
-      case BinHistory.HConsume(R, v) => q"$smc.runit[$v]"
-      case BinHistory.HGrow(L, v)    => q"$smc.unitl[$v]"
-      case BinHistory.HGrow(R, v)    => q"$smc.unitr[$v]"
+      case BinHistory.HConsume(L, v) => c.typecheck(q"$smc.lunit[$v]")
+      case BinHistory.HConsume(R, v) => c.typecheck(q"$smc.runit[$v]")
+      case BinHistory.HGrow(L, v)    => c.typecheck(q"$smc.unitl[$v]")
+      case BinHistory.HGrow(R, v)    => c.typecheck(q"$smc.unitr[$v]")
     }
   }
 
@@ -101,7 +103,7 @@ class SyntaxMacro(val c: blackbox.Context) extends Unappliers {
     a.app.getOrElse(mode.ident(mode.combineType(a.in.map(types))))
 
   def generateSyntax(body: c.Tree)(implicit mode: Mode): c.Tree = {
-    val (resOpt, debug: List[Any]) = body match {
+    val resOpt = body match {
       case q"(..$xs) => $b" =>
         b match {
           case q"{..$ls}" =>
@@ -119,13 +121,7 @@ class SyntaxMacro(val c: blackbox.Context) extends Unappliers {
                 val res                  = parse.alternate(connects, flow).reduce((x, y) => q"($x.andThen($y))")
                 val Assoc(body, in, out) = withLaterUse
 
-                val bodspl = body
-                  .map(_.map {
-                    case Assoc(b, DebugLst(ins), DebugLst(outs)) =>
-                      s"$outs <- ${b.getOrElse("<<REUSE>>")} -< $ins"
-                  })
-                  .intercalate(List("<<BREAK>>"))
-                (res.some, res :: bodspl)
+                res.some
               case symMode @ SymMon(p, x, i, r) =>
                 val (reused, unused) = parse.preventReuse(parsed)
                 c.info(c.enclosingPosition, parsed.toString, true)
@@ -135,7 +131,7 @@ class SyntaxMacro(val c: blackbox.Context) extends Unappliers {
                 }
                 if (reused.nonEmpty || unused.nonEmpty) c.abort(c.enclosingPosition, "error in variable use")
 
-                implicit val xsymbol: ComposeSymbol = ComposeSymbol(x.typeSymbol)
+                implicit val xsymbol: ComposeSymbol = ComposeSymbol(x)
 
                 val connectUpdater =
                   chain.to[List[Connect[ComInfo]]](parse.inOuts(withLaterUse)) >
@@ -153,21 +149,19 @@ class SyntaxMacro(val c: blackbox.Context) extends Unappliers {
                       res => constructSMCConnect(res.history.map(_.map(_.typ)))(symMode)
                     )
 
-                val res = parse.alternateOpt(connects, flow.map(_.some)).reduce((a, b) => q"$a.andThen($b)")
+                val res = parse
+                  .alternateOpt(connects, flow.map(_.some))
+                  .reduce((a, b) => q"$a.andThen($b)")
 
-                (res.some, res :: connects ::: flow )
+                res.some
             }
-          case _ => (none, List(xs, b))
+          case _ => none
         }
-      case _ => (none, List(body))
+      case _ => none
     }
-    val sss = debug.mkString("\n")
-    val res = resOpt.getOrElse(q"null")
-    c.info(c.enclosingPosition, res.toString(), true)
-    q"""
-       println($sss)
-       $res
-      """
+    val res = resOpt.getOrElse(c.abort(c.enclosingPosition, "unexpected syntax"))
+
+    res
   }
 
   def reportConnectErrors(xs: NonEmptyList[String]): Nothing = c.abort(c.enclosingPosition, "there were errors")
@@ -190,15 +184,16 @@ class SyntaxMacro(val c: blackbox.Context) extends Unappliers {
     case l => (List(), ParseElem.Other(l))
   }
 
-  final case class ComposeSymbol(sym: Symbol)
+  final case class ComposeSymbol(t: Type)
 
   final case class ComInfo(name: Option[TermName], typ: Type)
 
   object ComInfo {
-    implicit def pmagma(implicit sym: ComposeSymbol): PMagma[ComInfo] = new PMagma[ComInfo] {
+    implicit def pmagma(implicit compose: ComposeSymbol): PMagma[ComInfo] = new PMagma[ComInfo] {
       val empty: ComInfo = ComInfo(None, NoType)
 
-      def combine(x: ComInfo, y: ComInfo): ComInfo = ComInfo(None, appliedType(sym.sym, List(x.typ, y.typ)))
+      def combine(x: ComInfo, y: ComInfo): ComInfo =
+        ComInfo(None, appliedType(compose.t, List(x.typ, y.typ)))
     }
   }
 }

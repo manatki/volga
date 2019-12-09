@@ -1,6 +1,12 @@
 package volga
 
 import simulacrum.{op, typeclass}
+@typeclass
+trait Identity[->[_, _]] {
+  def id[A]: A -> A
+}
+
+object Identity extends CatInstanceChain[Identity]
 
 @typeclass
 trait Cat[->[_, _]] extends Identity[->] {
@@ -10,12 +16,15 @@ trait Cat[->[_, _]] extends Identity[->] {
   def compose[A, B, C](f: B -> C, g: A -> B): A -> C
 
   @op(">>>", alias = true)
-  def andThen[A, B, C](f: A -> B, g: B -> C): A -> C =
-    compose(g, f)
-
-  implicit class CatOps[A, B](f: A -> B) {
-    def o[C](g: C -> A): C -> B  = compose(f, g)
-    def >>[C](g: B -> C): A -> C = compose(g, f)
-  }
+  def andThen[A, B, C](f: A -> B)(g: B -> C): A -> C = compose(g, f)
 }
 
+object Cat extends CatInstanceChain[Cat]
+
+trait CatInstanceChain[TC[a[_, _]] >: Cat[a]] {
+  implicit def catFromCats[->[_, _]](implicit cat: Cat[->]): TC[->] =
+    new Cat[->] {
+      def id[A]: A -> A                                  = cat.id
+      def compose[A, B, C](f: B -> C, g: A -> B): A -> C = cat.compose(f, g)
+    }
+}

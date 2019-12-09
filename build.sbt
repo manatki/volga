@@ -13,7 +13,10 @@ val libs = libraryDependencies ++= List(
 )
 
 val testLibs = libraryDependencies ++= List(
-  "com.lihaoyi" %% "fastparse" % "2.1.3"
+  "com.lihaoyi"    %% "fastparse"  % "2.1.3",
+  "org.scalatest"  %% "scalatest"  % "3.1.0",
+  "org.scalacheck" %% "scalacheck" % "1.14.1",
+  "org.scalatestplus" %% "scalacheck-1-14" % "3.1.0.0",
 ) map (_ % Test)
 
 val plugins = libraryDependencies ++=
@@ -38,7 +41,7 @@ val options = scalacOptions ++=
   )
 
 lazy val core    = (project in file("modules/core")).settings(options, plugins, libs, testLibs)
-lazy val macros  = (project in file("modules/macros")).settings(options, macroDeps, plugins).dependsOn(core)
+lazy val macros  = (project in file("modules/macros")).settings(options, macroDeps, plugins, testLibs).dependsOn(core)
 lazy val rebuild = (project in file("modules/rebuild")).settings(options, libs, plugins).dependsOn(core, macros)
 
 lazy val volga = project.in(file(".")).aggregate(core, macros, core)

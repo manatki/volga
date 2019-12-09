@@ -18,8 +18,7 @@ object Chepukku {
     def lift[A, B](f: A => B): LK[A, B] = a => List(f(a))
 
     implicit val arr: Arr[LK] = new Arr[LK] {
-      def lift[A, B](f: A => B): LK[A, B]                  = a => List(f(a))
-      def first[A, B, C](fa: LK[A, B]): LK[(A, C), (B, C)] = { case (a, c) => fa.run(a).map(b => (b, c)) }
+      def lift[A, B](f: A => B): LK[A, B]                           = a => List(f(a))
 
       def split[A, B, C, D](f: LK[A, C], g: LK[B, D]): LK[(A, B), (C, D)] = {
         case (a, c) => for (b <- f.run(a); d <- g.run(c)) yield (b, d)
