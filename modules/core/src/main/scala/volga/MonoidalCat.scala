@@ -16,8 +16,6 @@ trait SemigropalCat[->[_, _], x[_, _]] extends Cat[->] with SemCatLike[->, x] {
 trait MonCatLike[->[_, _], x[_, _], I] extends SemCatLike[->, x]
 
 trait MonoidalCat[->[_, _], x[_, _], I] extends SemigropalCat[->, x] with MonCatLike[->, x, I] {
-  type One = I
-
   def lunit[A]: (I x A) -> A
   def unitl[A]: A -> (I x A)
   def runit[A]: (A x I) -> A

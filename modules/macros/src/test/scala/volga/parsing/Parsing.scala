@@ -103,8 +103,6 @@ object Parsing {
     dateTime(d, t)
   }
 
-
-
   def main(args: Array[String]): Unit = {
     val today = parseDate.from(LocalDate.now())
     println(today)
@@ -112,11 +110,18 @@ object Parsing {
     println(parseDate.to("31.11.2019"))
     println(parseDate.to("31.112019"))
     println(parseDate.to("a.b.c"))
+
+    val now = parseDateTime.from(LocalDateTime.now())
+    println(now)
+    println(parseDateTime.to(now))
+    println(parseDateTime.to("31.11.2019 23:61:59"))
+    println(parseDateTime.to("31.112019 23:59:59"))
+    println(parseDateTime.to("a.b.c d:e:f"))
   }
 }
 
 class ParsingSuite extends AnyFlatSpec with Matchers {
-  import Parsing.parseDate
+  import Parsing.{parseDate, parseDateTime}
 
   "parseDate" should "pretty print date" in { parseDate.from(LocalDate.of(2019, 12, 8)) should be("8.12.2019") }
 
@@ -130,9 +135,40 @@ class ParsingSuite extends AnyFlatSpec with Matchers {
     parseDate.to("a.b.c") should be(
       Left(
         NonEmptyList.of(
-          "a is not an int",
-          "b is not an int",
           "c is not an int",
+          "b is not an int",
+          "a is not an int",
+        )
+      )
+    )
+  }
+
+  "parseDateTime" should "pretty print now" in {
+    parseDateTime.from(LocalDateTime.of(2019, 12, 8, 15, 40, 23)) should be("8.12.2019 15:40:23")
+  }
+
+  it should "parse date" in {
+    parseDateTime.to("8.12.2019 15:40:23") should be(Right(LocalDateTime.of(2019, 12, 8, 15, 40, 23)))
+  }
+
+  it should "report logic error" in {
+    parseDateTime.to("31.11.2019 23:61:59") should be(
+      Left(NonEmptyList.of("Invalid date 'NOVEMBER 31'", "Invalid value for MinuteOfHour (valid values 0 - 59): 61"))
+    )
+  }
+
+  it should "report split error" in { parseDateTime.to("31.112019") should be("112019 does not contain '.'".leftNel) }
+
+  it should "report errors in parallel" in {
+    parseDateTime.to("a.b.c d:e:f") should be(
+      Left(
+        NonEmptyList.of(
+          "c is not an int",
+          "b is not an int",
+          "a is not an int",
+          "d is not an int",
+          "e is not an int",
+          "f is not an int"
         )
       )
     )
@@ -198,7 +234,6 @@ object ParsingByHand {
         .andThen(parsingSMC.swap[Int, Int].split(ident[Parsing, Int]))
     )
     .andThen(date)
-
 
   val parseDateAndTimeManual =
     sep(".")
