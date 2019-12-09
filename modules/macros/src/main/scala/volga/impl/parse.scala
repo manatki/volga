@@ -174,19 +174,8 @@ object parse {
     xs match {
       case (from, to) =>
         val fromBin = portsToBin(from)
-        fromBin.adaptation(portsToBin(to)).map(BinRes(fromBin).modAll).toEitherNel
+        fromBin.adaptation(portsToBin(to)).map(_.optimize).map(BinRes(fromBin).modAll).toEitherNel
     }
-
-  //    p.modApp(
-  //      _.foldRight((p.out.toSet, List[Block[Option[T], N]]())) {
-  //        case (block, (need, acc)) =>
-  //          val provides    = (block: List[AssocL[T, N]]).foldMap(_.out.toSet)
-  //          val pass        = need -- provides
-  //          val mappedBlock = block.map(_.modApp(_.some))
-  //          val next        = (block: List[AssocL[T, N]]).foldMap(_.in.toSet) ++ pass
-  //          (next, prependUnless(Assoc(none[T], pass.toList, pass.toList), mappedBlock, pass.isEmpty) :: acc)
-  //      }._2
-  //    )
 
   def inOuts[T, N](p: Parsed[T, N]): List[Connect[N]] = {
     val ins  = List(p.in) :: p.app.map(_.map(_.out))

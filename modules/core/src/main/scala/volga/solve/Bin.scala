@@ -151,8 +151,8 @@ sealed trait BinOp {
 
 object BinOp {
   implicit class BinOpOps(private val binops: Vector[BinOp]) extends AnyVal {
-    def invertAll: Vector[BinOp]                              = binops.reverseMap(_.invert)
-    def mergeAll(next: TraversableOnce[BinOp]): Vector[BinOp] = next.foldLeft(binops)(_ merge _)
+    def invertAll: Vector[BinOp]                       = binops.reverseIterator.map(_.invert).toVector
+    def mergeAll(next: Iterable[BinOp]): Vector[BinOp] = next.foldLeft(binops)(_ merge _)
     def merge(op: BinOp): Vector[BinOp] =
       if (op.isEmpty) binops else mergeOneLoop(op, Vector())
     def optimize: Vector[BinOp] = Vector() mergeAll binops
