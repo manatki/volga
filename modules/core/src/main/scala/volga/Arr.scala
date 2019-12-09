@@ -5,11 +5,7 @@ import simulacrum.{op, typeclass}
 @typeclass
 trait ArrLike[->[_, _]]
 
-@typeclass
-trait Identity[->[_, _]] {
-  def id[A]: A -> A
-}
-
+object ArrLike extends ArrInstanceChain[ArrLike]
 @typeclass
 trait Arr[->[_, _]] extends Cat[->] with ArrLike[->] {
   def lift[A, B](f: A => B): A -> B
@@ -22,8 +18,8 @@ trait Arr[->[_, _]] extends Cat[->] with ArrLike[->] {
   @op("&&&", alias = true)
   def product[A, B, C](f: A -> B, g: A -> C): A -> (B, C) = compose(split(f, g), lift(a => (a, a)))
 
-  def term[A]: A -> Unit     = lift(_ => ())
-  def id[A]: A -> A = lift(identity)
+  def term[A]: A -> Unit = lift(_ => ())
+  def id[A]: A -> A      = lift(identity)
 
   def rmap[A, B, C](a1: A -> B)(f: B => C): A -> C = compose(lift(f), a1)
   def lmap[A, B, C](a1: A -> B)(f: C => A): C -> B = compose(a1, lift(f))
@@ -60,14 +56,7 @@ trait Arr[->[_, _]] extends Cat[->] with ArrLike[->] {
     }
 }
 
-object Arr {
-  implicit def fromCats[->[_, _]](implicit arr: Arrow[->]): Arr[->] =
-    new Arr[->] {
-      def lift[A, B](f: A => B): A -> B                             = arr.lift(f)
-      def split[A, B, C, D](f: A -> C, g: B -> D): (A, B) -> (C, D) = arr.split(f, g)
-      def compose[A, B, C](f: B -> C, g: A -> B): A -> C            = arr.compose(f, g)
-    }
-}
+object Arr extends ArrInstanceChain[Arr]
 
 @typeclass
 trait ArrChoice[->[_, _]] extends Arr[->] {
@@ -85,15 +74,7 @@ trait ArrChoice[->[_, _]] extends Arr[->] {
     choose(lift(identity[C]))(fab)
 }
 
-object ArrChoice{
-  implicit def fromCats[->[_, _]](implicit arr: ArrowChoice[->]): ArrChoice[->] =
-    new ArrChoice[->] {
-      def lift[A, B](f: A => B): A -> B                             = arr.lift(f)
-      def split[A, B, C, D](f: A -> C, g: B -> D): (A, B) -> (C, D) = arr.split(f, g)
-      def compose[A, B, C](f: B -> C, g: A -> B): A -> C            = arr.compose(f, g)
-      def choose[A, B, C, D](f: A -> C)(g: B -> D): Either[A, B] -> Either[C, D] = ???
-    }
-}
+object ArrChoice extends ArrChoiceInstanceChain[ArrChoice]
 
 @typeclass trait ArrPlus[->[_, _]] extends Arr[->] {
   @op(">+<", alias = true)
@@ -110,6 +91,21 @@ object ArrChoice{
     })(app)
 }
 
-@typeclass trait ArrCoapply[->[_, _]] extends ArrChoice[->]{
+trait ArrInstanceChain[TC[a[_, _]] >: Arr[a]] {
+  implicit def arrowFromCats[->[_, _]](implicit arr: Arrow[->]): TC[->] =
+    new Arr[->] {
+      def lift[A, B](f: A => B): A -> B                             = arr.lift(f)
+      def split[A, B, C, D](f: A -> C, g: B -> D): (A, B) -> (C, D) = arr.split(f, g)
+      def compose[A, B, C](f: B -> C, g: A -> B): A -> C            = arr.compose(f, g)
+    }
+}
 
+trait ArrChoiceInstanceChain[TC[a[_, _]] >: ArrChoice[a]] {
+  implicit def arrowChoiceFromCats[->[_, _]](implicit arr: ArrowChoice[->]): TC[->] =
+    new ArrChoice[->] {
+      def lift[A, B](f: A => B): A -> B                                          = arr.lift(f)
+      def split[A, B, C, D](f: A -> C, g: B -> D): (A, B) -> (C, D)              = arr.split(f, g)
+      def compose[A, B, C](f: B -> C, g: A -> B): A -> C                         = arr.compose(f, g)
+      def choose[A, B, C, D](f: A -> C)(g: B -> D): Either[A, B] -> Either[C, D] = arr.choose(f)(g)
+    }
 }
