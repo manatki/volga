@@ -103,7 +103,7 @@ class SyntaxMacro(val c: blackbox.Context) extends Unappliers {
     a.app.getOrElse(mode.ident(mode.combineType(a.in.map(types))))
 
   def generateSyntax(body: c.Tree)(implicit mode: Mode): c.Tree = {
-    val (resOpt, debug: List[Any]) = body match {
+    val resOpt = body match {
       case q"(..$xs) => $b" =>
         b match {
           case q"{..$ls}" =>
@@ -121,13 +121,7 @@ class SyntaxMacro(val c: blackbox.Context) extends Unappliers {
                 val res                  = parse.alternate(connects, flow).reduce((x, y) => q"($x.andThen($y))")
                 val Assoc(body, in, out) = withLaterUse
 
-                val bodspl = body
-                  .map(_.map {
-                    case Assoc(b, DebugLst(ins), DebugLst(outs)) =>
-                      s"$outs <- ${b.getOrElse("<<REUSE>>")} -< $ins"
-                  })
-                  .intercalate(List("<<BREAK>>"))
-                (res.some, res :: bodspl)
+                res.some
               case symMode @ SymMon(p, x, i, r) =>
                 val (reused, unused) = parse.preventReuse(parsed)
                 c.info(c.enclosingPosition, parsed.toString, true)
@@ -159,20 +153,13 @@ class SyntaxMacro(val c: blackbox.Context) extends Unappliers {
                   .alternateOpt(connects, flow.map(_.some))
                   .reduce((a, b) => q"$a.andThen($b)")
 
-                (res.some, res :: connects ::: flow)
+                res.some
             }
-          case _ => (none, List(xs, b))
+          case _ => none
         }
-      case _ => (none, List(body))
+      case _ => none
     }
-    val sss = debug.mkString("\n")
-    val res = resOpt.getOrElse(q"null")
-
-    c.info(c.enclosingPosition, res.toString(), true)
-//    q"""
-//       println($sss)
-//       $res
-//      """
+    val res = resOpt.getOrElse(c.abort(c.enclosingPosition, "unexpected syntax"))
 
     res
   }
