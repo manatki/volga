@@ -3,6 +3,7 @@ import cats.{Applicative, Functor, Monad}
 import cats.syntax.flatMap._
 import cats.syntax.functor._
 import cats.syntax.apply._
+import volga.Arr
 import volga.rebuild.Rebuild.Identity
 
 trait Rebuild[F[_], A, B] { self =>
@@ -10,7 +11,7 @@ trait Rebuild[F[_], A, B] { self =>
   def build(a: A)(implicit F: Monad[F]): F[(I, B)]
   def rebuild(a: A, refresh: Boolean, mid: I)(implicit F: Monad[F]): F[(I, B, Boolean)]
 
-  def compose[C](that: Rebuild[F, B, C]): Rebuild[F, A, C] =
+  def andThen[C](that: Rebuild[F, B, C]): Rebuild[F, A, C] =
     that match {
       case lifted: LiftedRebuild[F, B, C] => self.rmap(lifted)
       case _ =>
@@ -61,7 +62,7 @@ trait LiftedRebuild[F[_], A, B] extends Rebuild[F, A, B] with (A => B) { self =>
   def rebuild(a: A, refresh: Boolean, mid: Unit)(implicit F: Monad[F]): F[(Unit, B, Boolean)] =
     F.pure(((), apply(a), refresh))
 
-  override def compose[C](g: Rebuild[F, B, C]): Rebuild[F, A, C] = g match {
+  override def andThen[C](g: Rebuild[F, B, C]): Rebuild[F, A, C] = g match {
     case lifted: LiftedRebuild[F, B, C] => Rebuild.lift[F]((a: A) => lifted(apply(a)))
     case _                              => g.lmap(this)
   }
@@ -93,6 +94,14 @@ object Rebuild {
 
   class MkLift[F[_]](val dummy: Boolean) extends AnyVal {
     def apply[A, B](f: LiftedRebuild[F, A, B]): Rebuild[F, A, B] = f
+  }
+
+  implicit def arr[F[_]: Monad]: Arr[Rebuild[F, *, *]] = new Arr[Rebuild[F, *, *]] {
+    def lift[A, B](f: A => B): Rebuild[F, A, B] = lift(f)
+
+    def split[A, B, C, D](f: Rebuild[F, A, C], g: Rebuild[F, B, D]): Rebuild[F, (A, B), (C, D)] = f.split(g)
+
+    def compose[A, B, C](f: Rebuild[F, B, C], g: Rebuild[F, A, B]): Rebuild[F, A, C] = g.andThen(f)
   }
 
 }

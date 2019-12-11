@@ -1,5 +1,6 @@
-package volga
-package iso
+package volga.data
+
+import volga.Symon
 
 trait Iso[A, B] { self =>
   def to(a: A): B
@@ -19,7 +20,7 @@ object Iso {
     def from(b: B): A = g(b)
   }
 
-  implicit val symon: Symon[Iso, (*, *), Unit] = new Symon[Iso, (*, *), Unit] {
+  implicit val symmonInstance: Symon[Iso, (*, *), Unit] = new Symon[Iso, (*, *), Unit] {
     def swap[A, B] = Iso[(A, B), (B, A)](_.swap)(_.swap)
 
     def lunit[A] =

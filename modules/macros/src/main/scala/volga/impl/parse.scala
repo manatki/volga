@@ -168,7 +168,7 @@ object parse {
   private def listToBin[N](elems: List[Bin[N]]): Bin[N] = elems.reduceOption(Bin.Branch(_, _)).getOrElse(Bin.Bud)
 
   private def portsToBin[N](ports: Ports[N]): Bin[N] =
-    listToBin(ports.map(xs => listToBin(xs.map[Bin[N]](Bin.Leaf(_)))))
+    listToBin(ports.map(xs => listToBin(xs.map(Bin.Leaf(_)))))
 
   def binTransfers[N: PMagma](xs: Connect[N]): EitherNel[String, BinRes[N]] =
     xs match {
