@@ -6,6 +6,7 @@ import cats.syntax.functor._
 import cats.{Applicative, Monad, StackSafeMonad}
 import volga.syntax.arr._
 import volga.syntax.cat._
+import volga.syntax.comp._
 import cats.syntax.apply._
 import cats.syntax.semigroupal._
 
@@ -76,7 +77,7 @@ object ConsoleA {
 
 sealed trait ConsoleArr[X, Y]
 
-object ConsoleArr extends App {
+object ConsoleArr {
   case class Lift[A, B](f: A => B)                                                extends ConsoleArr[A, B]
   case class AndThen[A, B, C](start: ConsoleArr[A, B], next: ConsoleArr[B, C])    extends ConsoleArr[A, C]
   case class Split[A, B, C, D](first: ConsoleArr[A, B], second: ConsoleArr[C, D]) extends ConsoleArr[(A, C), (B, D)]
@@ -84,12 +85,12 @@ object ConsoleArr extends App {
   case object PutLine                                                             extends ConsoleArr[String, Unit]
 
   implicit val arrow: Arr[ConsoleArr] = new Arr[ConsoleArr] {
-      def lift[A, B](f: A => B): ConsoleArr[A, B] = Lift(f)
+    def lift[A, B](f: A => B): ConsoleArr[A, B] = Lift(f)
 
-      def split[A, B, C, D](f: ConsoleArr[A, C], g: ConsoleArr[B, D]): ConsoleArr[(A, B), (C, D)] = Split(f, g)
+    def split[A, B, C, D](f: ConsoleArr[A, C], g: ConsoleArr[B, D]): ConsoleArr[(A, B), (C, D)] = Split(f, g)
 
-      def compose[A, B, C](f: ConsoleArr[B, C], g: ConsoleArr[A, B]): ConsoleArr[A, C] = AndThen(g, f)
-    }
+    def compose[A, B, C](f: ConsoleArr[B, C], g: ConsoleArr[A, B]): ConsoleArr[A, C] = AndThen(g, f)
+  }
 
   val getLine: ConsoleArr[Unit, String] = GetLine
   val putLine: ConsoleArr[String, Unit] = PutLine
@@ -99,8 +100,11 @@ object ConsoleArr extends App {
   val plus: ConsoleArr[(Int, Int), Int]            = Lift(tupled(_ + _))
   val divMod: ConsoleArr[(Int, Int), (Int, Int)]   = Lift { case (x, y) => (x / y, x % y) }
 
-  def echo2: ConsoleArr[Unit, Unit] =
+  val echo2: ConsoleArr[Unit, Unit] =
     (getLine &&& getLine) >>> concat >>> putLine
+
+  val echo2Verbose: ConsoleArr[Unit, Unit] =
+    liftf((_: Unit) => ((), ())) andThen (getLine split getLine) andThen concat andThen putLine
 
   def countGets[X, Y](carr: ConsoleArr[X, Y]): Int =
     carr match {

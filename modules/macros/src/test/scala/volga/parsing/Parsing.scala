@@ -6,21 +6,21 @@ import java.util.regex.Pattern
 
 import cats.Id
 import cats.data.{EitherNel, NonEmptyList}
-import cats.instances.either._
-import cats.instances.parallel._
-import cats.syntax.either._
-import cats.syntax.option._
+import cats.implicits._
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import volga.data.Dikleisli
 import volga.syntax.cat._
 import volga.syntax.comp._
 import volga.syntax.symmon._
+import mouse.string._
+import volga.control.MPar
 
 import scala.util.Try
 
 object Parsing {
-  implicit val parsingSMC: Symon[Parsing, (*, *), Unit] = Dikleisli.instance
+  implicit val parsingSMC: Symon[Parsing, Tuple2, Unit] =
+    Dikleisli.instance[EitherNel[String, *], Id](MPar.instanceByParalel , implicitly, MPar.instanceByMonad, implicitly)
 
   type Parsing[A, B] = Dikleisli[EitherNel[String, *], Id, A, B]
 
@@ -39,7 +39,7 @@ object Parsing {
     ) { case (s1, s2) => s"$s1$sep$s2" }
 
   val readInt: Parsing[String, Int] =
-    Dikleisli((s: String) => s.toIntOption.toRightNel(s"$s is not an int"))((_: Int).toString: Id[String])
+    Dikleisli((s: String) => s.parseIntOption.toRightNel(s"$s is not an int"))((_: Int).toString: Id[String])
 
   val date: Parsing[((Int, Int), Int), LocalDate] =
     Dikleisli { dmy: ((Int, Int), Int) =>

@@ -3,6 +3,7 @@ package volga.iso
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.must.Matchers
 import org.scalatestplus.scalacheck.ScalaCheckDrivenPropertyChecks
+import volga.data.Iso
 import volga.syntax.comp._
 import volga.syntax.cat._
 import volga.syntax.symmon._

@@ -124,7 +124,6 @@ class SyntaxMacro(val c: blackbox.Context) extends Unappliers {
                 res.some
               case symMode @ SymMon(p, x, i, r) =>
                 val (reused, unused) = parse.preventReuse(parsed)
-                c.info(c.enclosingPosition, parsed.toString, true)
                 reused.foreach { case (t, n) => c.error(t.pos, s"variable $n is used second time") }
                 unused.foreach {
                   case (t, n) => c.error(t.fold(c.enclosingPosition)(_.pos), s"variable $n is not used")
@@ -179,7 +178,6 @@ class SyntaxMacro(val c: blackbox.Context) extends Unappliers {
     case q"(..${Names(names)})" => (List(), ParseElem.Result(names))
     case ArrSyn(smth, args) =>
       val name = if (last) lastTerm else midTerm
-      c.info(smth.pos, args.toString(), false)
       (List(), ParseElem.MultiStart(args, name, smth, 0))
     case l => (List(), ParseElem.Other(l))
   }
