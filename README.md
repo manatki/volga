@@ -95,5 +95,5 @@ Lets say you have ` type Process[Input, Output]`, you want to use process compre
 
 ## Additional rules for symmetric monoidal categories
 
-1.  Any variable from defined in the lambda parameter clause 
-or extracted as a result of morphialsm application should be used **exactly one time**
+1.  Any variable defined in the lambda parameter clause 
+or extracted as a result of morphism application should be used **exactly one time**
