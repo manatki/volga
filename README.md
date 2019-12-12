@@ -41,7 +41,7 @@ Lets say you have ` type Process[Input, Output]`, you want to use process compre
 
 ## Syntactic rules
 
-1. comprehension for arrow
+1. a comprehension for arrow
 
     ```scala
     proc: (X1, X2, ...) -> (Y1, Y2, ...)
@@ -92,3 +92,8 @@ Lets say you have ` type Process[Input, Output]`, you want to use process compre
      ----
      ```
      could be used to enforce the end of parallel block
+
+## Additional rules for symmetric monoidal categories
+
+1.  Any variable from defined in the lambda parameter clause 
+or extracted as a result of morphialsm application should be used **exactly one time**
