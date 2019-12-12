@@ -7,7 +7,7 @@
 Arrow and Symmetric Monoidal Category composition syntax helper
 
 ## How to use:
-Lets say you have ` type Process[Input, Output]`, you want to use process comprehensions for your type
+Let's say you have ` type Process[Input, Output]`, you want to use process comprehensions for your type
 
 1. Define volga.Arr or volga.Symon instance for your type
 2. Import syntax extensions
@@ -46,21 +46,21 @@ Lets say you have ` type Process[Input, Output]`, you want to use process compre
     ```scala
     proc: (X1, X2, ...) -> (Y1, Y2, ...)
     ```
-    or monoidal morpshism (note left assiciativity of products)
+    or monoidal morphism (note left associativity of products)
     ```scala
     proc: (Tensor(...(Tensor(X1, X2), ...) -> Tensor(...Tensor(Y1, Y2),..)
     ``` 
     should form a lambda function having parameters of types `(V[X1], V[X2], ...) =>`
 
-2. last line in comprenension defined in 1. 
+2. last line in comprenension defined in (1.)
 
-    should be in form `(y1, y2, ...)` 
+    should be in the form `(y1, y2, ...)` 
     or non-assigning application
     `someProcess(z1, z2, ...)` where `someProcess` is an arrow
     ```scala
     proc: (Z1, Z2, ...) -> (Y1, Y2, ...)
     ```
-    or monoidal morpshism (note left assiciativity of products)
+    or monoidal morpshism (note left associativity of products)
     ```scala
     proc: (Tensor(...(Tensor(Z1, Z2), ...) -> Tensor(...Tensor(Y1, Y2),..)
     ``` 
@@ -70,7 +70,7 @@ Lets say you have ` type Process[Input, Output]`, you want to use process compre
     ```scala
     proc: (X1, X2, ...) -> (Y1, Y2, ...)
     ```
-    or monoidal morpshim (note left assiciativity of products)
+    or monoidal morphism (note left associativity of products)
     ```scala
     proc: (Tensor(...(Tensor(X1, X2), ...) -> Tensor(...Tensor(Y1, Y2),..)
     ``` 
@@ -84,7 +84,7 @@ Lets say you have ` type Process[Input, Output]`, you want to use process compre
     ```scala
     proc(x1, x2, ...)
     ```
-    could be used to dispose result of arrow, or use morphism with unit domain
+    could be used to dispose of the result of an arrow, or use morphism with unit domain
 
 5. special block-separator
 
