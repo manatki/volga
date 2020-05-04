@@ -109,7 +109,7 @@ or extracted as a result of morphism application should be used **exactly one ti
 
 Volga syntax works by extending 
 your arrows and morphisms with the `apply`
-methods which then are analized by the macros.
+methods which then are analyzed by the macros.
 
 Types which have `apply` method already
 i.e. `Function1` and `cats.data.Kleisli` 
