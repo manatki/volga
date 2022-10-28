@@ -2,7 +2,7 @@ package volga.util
 import cats.Apply
 import cats.instances.list._
 import cats.syntax.apply._
-import tofu.optics.{Contains, PContains, PItems, PRepeated, Property}
+import glass.{Contains, PContains, PItems, PRepeated, Property}
 
 object opts {
   def both[A, B] = new PRepeated[(A, A), (B, B), A, B] {

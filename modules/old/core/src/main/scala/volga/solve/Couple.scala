@@ -1,8 +1,8 @@
 package volga.solve
 import cats.{Applicative, Eval, Traverse}
 import cats.syntax.apply._
-import tofu.optics.PItems
-import tofu.optics.tags.{PTagApply, every}
+import glass.PItems
+import glass.tags.{PTagApply, every}
 
 case class Couple[+A](x: A, y: A)
 

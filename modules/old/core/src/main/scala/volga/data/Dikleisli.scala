@@ -2,10 +2,8 @@ package volga.data
 
 import cats.data.AndThen
 import cats.instances.tuple._
-import cats.syntax.either._
-import cats.syntax.parallel._
+import cats.syntax.all._
 import cats.{Applicative, Monad}
-import tofu.syntax.monadic._
 import volga.Symon
 import volga.control.MPar
 

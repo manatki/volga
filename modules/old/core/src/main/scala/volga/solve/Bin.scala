@@ -76,7 +76,7 @@ sealed trait Bin[+A] {
       Permutations
         .swaps(perm)
         .foldM(zipper.normalize) {
-          case (z, (i, j)) => z.swapElems(i, j).liftTo[Either[String, ?]](s"Bad state while swapping $i <-> $j")
+          case (z, (i, j)) => z.swapElems(i, j).liftTo[Either[String, *]](s"Bad state while swapping $i <-> $j")
         }
         .map(_.history ++ bin.zipper.normalize.history.invertAll)
     }

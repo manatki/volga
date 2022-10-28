@@ -1,9 +1,7 @@
 package volga.data
 import cats.instances.either._
-import cats.syntax.bitraverse._
-import cats.syntax.traverse._
+import cats.syntax.all._
 import cats.{Monad, Parallel}
-import tofu.syntax.monadic._
 import volga.ArrApply
 import volga.control.MPar
 
@@ -40,7 +38,7 @@ object Kleisli {
     final override def product[A, B, C](f: Kleisli[F, A, B], g: Kleisli[F, A, C]): Kleisli[F, A, (B, C)] =
       a => Parallel.parTuple2(f.run(a), g.run(a))
 
-    final override def term[A]: Kleisli[F, A, Unit] = _ => unit[F]
+    final override def term[A]: Kleisli[F, A, Unit] = _ => ().pure[F]
 
     final override def first[A, B, C](f: Kleisli[F, A, B]): Kleisli[F, (A, C), (B, C)] = {
       case (a, c) => f.run(a).tupleRight(c)

@@ -2,20 +2,18 @@ package volga
 import cats.arrow.{Arrow, ArrowChoice}
 import simulacrum.{op, typeclass}
 
-@typeclass
 trait ArrLike[->[_, _]]
 
 object ArrLike extends ArrInstanceChain[ArrLike]
-@typeclass
 trait Arr[->[_, _]] extends Cat[->] with ArrLike[->] {
   def lift[A, B](f: A => B): A -> B
-  @op("***", alias = true)
+
   def split[A, B, C, D](f: A -> C, g: B -> D): (A, B) -> (C, D)
 
   def proj1[A, B]: (A, B) -> A = lift(_._1)
   def proj2[A, B]: (A, B) -> B = lift(_._2)
 
-  @op("&&&", alias = true)
+  
   def product[A, B, C](f: A -> B, g: A -> C): A -> (B, C) = compose(split(f, g), lift(a => (a, a)))
 
   def term[A]: A -> Unit = lift(_ => ())
@@ -58,12 +56,9 @@ trait Arr[->[_, _]] extends Cat[->] with ArrLike[->] {
 
 object Arr extends ArrInstanceChain[Arr]
 
-@typeclass
 trait ArrChoice[->[_, _]] extends Arr[->] {
-  @op("+++", alias = true)
   def choose[A, B, C, D](f: A -> C)(g: B -> D): Either[A, B] -> Either[C, D]
 
-  @op("|||", alias = true)
   def choice[A, B, C](f: A -> C)(g: B -> C): Either[A, B] -> C =
     andThen(choose(f)(g))(lift(_.merge))
 
@@ -75,13 +70,12 @@ trait ArrChoice[->[_, _]] extends Arr[->] {
 }
 
 object ArrChoice extends ArrChoiceInstanceChain[ArrChoice]
+trait ArrPlus[->[_, _]] extends Arr[->] {
 
-@typeclass trait ArrPlus[->[_, _]] extends Arr[->] {
-  @op(">+<", alias = true)
   def plus[A, B](f: A -> B, g: A -> B): A -> B
 }
 
-@typeclass trait ArrApply[->[_, _]] extends ArrChoice[->] {
+trait ArrApply[->[_, _]] extends ArrChoice[->] {
   def app[A, B]: (A, A -> B) -> B
 
   override def choose[A, B, C, D](f: A -> C)(g: B -> D): Either[A, B] -> Either[C, D] =

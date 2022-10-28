@@ -11,8 +11,8 @@ import cats.syntax.functor._
 import cats.syntax.option._
 import cats.syntax.parallel._
 import cats.syntax.traverse._
-import tofu.optics.chain
-import tofu.optics.tags._
+import glass.chain
+import glass.tags._
 import volga.impl.parse.Connect
 import volga.solve.BinHistory.HChain
 import volga.solve.{BinHistory, BinOp, BinRes, PMagma}
