@@ -1,6 +1,6 @@
 name := "volga"
 
-val publishVersion = "0.1"
+val publishVersion = "0.2"
 
 val oldSettings = Vector(
   libraryDependencies ++= List(
@@ -30,7 +30,8 @@ val oldSettings = Vector(
       "-language:postfixOps",
       "-deprecation",
       "-Ymacro-annotations",
-    )
+    ),
+  publish / skip := true,
 )
 
 val oldMacroDeps = List(
@@ -48,7 +49,15 @@ lazy val volga =
   project
     .in(file("."))
     .settings(publish / skip := true)
-    .aggregate(oldCore, oldMacros)
+    .aggregate(core, oldCore, oldMacros)
+
+lazy val commonSettings = Vector(
+  scalaVersion := "3.1.3",
+  libraryDependencies += "org.typelevel" %% "cats-core" % "2.8.0",
+)
+
+lazy val core =
+  project.in(file("modules/core")).settings(commonSettings)
 
 lazy val publishSettings = List(
   moduleName := { "volga-" + name.value },

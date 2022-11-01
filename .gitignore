@@ -6,3 +6,4 @@ target
 .vscode
 project/metals.sbt
 project/project
+*.sc
