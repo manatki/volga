@@ -4,9 +4,8 @@ import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.must.Matchers
 import org.scalatestplus.scalacheck.ScalaCheckDrivenPropertyChecks
 import volga.data.Iso
+import volga.syntax.all._
 import volga.syntax.comp._
-import volga.syntax.cat._
-import volga.syntax.symmon._
 
 class IsoSuite extends AnyFlatSpec with ScalaCheckDrivenPropertyChecks with Matchers {
   val iso = symon[Iso, (*, *), Unit]

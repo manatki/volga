@@ -11,11 +11,11 @@ import cats.instances.either._
 import volga.solve.BinOp.{L, R}
 
 object BinParser extends App {
-  def leaf[_: P]: P[Bin[String]] = P(CharPred(_.isLetterOrDigit).rep(1).!).map(Leaf(_))
-  def bud[_: P]                  = P("*").map(_ => Bud)
-  def branch[_: P]               = P("(" ~ bin ~ "," ~ bin ~ ")").map((Branch[String] _).tupled)
-  def bin[_: P]: P[Bin[String]]  = branch | leaf | bud
-  def binTree[_: P]              = bin ~ End
+  def leaf[p: P]: P[Bin[String]] = P(CharPred(_.isLetterOrDigit).rep(1).!).map(Leaf(_))
+  def bud[p: P]                  = P("*").map(_ => Bud)
+  def branch[p: P]               = P("(" ~ bin ~ "," ~ bin ~ ")").map((Branch[String] _).tupled)
+  def bin[p: P]: P[Bin[String]]  = branch | leaf | bud
+  def binTree[p: P]              = bin ~ End
 
   val tree  = parse("((1,  (* , (2, 3))), (4, (5, 6)))", binTree(_), true).get.value
   val tree2 = parse("(3, (((4, 1), (*, 6)), (5, (*, 2)))) ", binTree(_)).get.value

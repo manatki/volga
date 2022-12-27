@@ -1,8 +1,7 @@
 package volga
 
 import volga.syntax.comp._
-import volga.syntax.symmon._
-import volga.syntax.cat._
+import volga.syntax.all._
 
 final abstract class Combo[+A, +B]
 case object Dummy

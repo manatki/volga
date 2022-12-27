@@ -2,7 +2,7 @@ name := "volga"
 
 val publishVersion = "0.2"
 
-crossScalaVersions := List("3.1.2", "2.13.10")
+crossScalaVersions := List("3.1.3", "2.13.10")
 
 val oldSettings = Vector(
   libraryDependencies ++= List(
@@ -43,9 +43,12 @@ val oldMacroDeps = List(
   scalacOptions += "-language:experimental.macros"
 )
 
-lazy val oldCore = (project in file("modules/old/core")).settings(oldSettings)
+lazy val old = file("modules/old")
+
+lazy val oldCore = project.in(old / "core").settings(oldSettings)
+
 lazy val oldMacros =
-  (project in file("modules/old/macros")).settings(oldSettings ++ oldMacroDeps).dependsOn(oldCore)
+  project.in(old / "macros").settings(oldSettings ++ oldMacroDeps).dependsOn(oldCore)
 
 lazy val volga =
   project

@@ -1,6 +1,8 @@
 package volga
 
-trait SemCatLike[->[_, _], x[_, _]]
+trait SemCatLike[->[_, _], x[_, _]]{
+  def split[A, B, C, D](f: A -> B, g: C -> D): (A x C) -> (B x D)
+}
 
 trait SemigropalCat[->[_, _], x[_, _]] extends Cat[->] with SemCatLike[->, x] {
   type Tensor[a, b] = a x b
@@ -9,7 +11,6 @@ trait SemigropalCat[->[_, _], x[_, _]] extends Cat[->] with SemCatLike[->, x] {
   def assocr[A, B, C]: ((A x B) x C) -> (A x (B x C))
 
   def tensor[A, B, C, D](f: A -> B, g: C -> D): (A x C) -> (B x D)
-
   def split[A, B, C, D](f: A -> B, g: C -> D): (A x C) -> (B x D) = tensor(f, g)
 }
 

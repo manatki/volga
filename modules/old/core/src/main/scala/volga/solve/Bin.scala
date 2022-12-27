@@ -159,13 +159,13 @@ object BinOp {
     def put(op: BinOp)          = if (op.isEmpty) binops else binops :+ op
 
     @tailrec private[BinOpOps] def mergeOneLoop(op: BinOp, rest: Vector[BinOp]): Vector[BinOp] = binops match {
-      case Vector() => op +: rest
       case init :+ last =>
         val Exchange(cont, res) = last.exchange(op)
         res match {
           case head +: tail if cont => init.mergeOneLoop(head, tail ++ rest)
           case _                    => init ++ res ++ rest
         }
+      case empty => op +: rest
     }
   }
 

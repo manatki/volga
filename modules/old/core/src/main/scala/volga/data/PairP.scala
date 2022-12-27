@@ -21,7 +21,7 @@ private[volga] trait PairPArrInstance[P[_, _], Q[_, _]] extends Arr[PairP[P, Q, 
 
   final override def lift[A, B](f: A => B): PairP[P, Q, A, B] =
     PairP(P.lift(f), Q.lift(f))
-  final override def split[A, B, C, D](f: PairP[P, Q, A, C], g: PairP[P, Q, B, D]): PairP[P, Q, (A, B), (C, D)] =
+  final override def split[A, B, C, D](f: PairP[P, Q, A, B], g: PairP[P, Q, C, D]): PairP[P, Q, (A, C), (B, D)] =
     PairP(P.split(f.pab, g.pab), Q.split(f.qab, g.qab))
 }
 

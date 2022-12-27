@@ -2,8 +2,7 @@ package volga
 import cats.{Eval, Monad}
 import cats.data.Kleisli
 import volga.syntax.comp._
-import volga.syntax.arr._
-import volga.syntax.cat._
+import volga.syntax.all._
 import cats.syntax.applicative._
 import cats.syntax.flatMap._
 import cats.syntax.functor._
@@ -38,7 +37,7 @@ trait Klsl[+F[_], A, B] {
 object Klsl {
   implicit def arr[F[_]: Monad]: Arr[Klsl[F, *, *]] = new Arr[Klsl[F, *, *]] {
     def lift[A, B](f: A => B): Klsl[F, A, B] = f(_).pure[F]
-    def split[A, B, C, D](f: Klsl[F, A, C], g: Klsl[F, B, D]): Klsl[F, (A, B), (C, D)] = {
+    def split[A, B, C, D](f: Klsl[F, A, B], g: Klsl[F, C, D]): Klsl[F, (A, C), (B, D)] = {
       case (a, b) => f.run(a).flatMap(c => g.run(b).map((c, _)))
     }
     def compose[A, B, C](f: Klsl[F, B, C], g: Klsl[F, A, B]): Klsl[F, A, C] =

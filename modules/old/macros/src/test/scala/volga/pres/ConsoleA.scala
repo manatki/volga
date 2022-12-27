@@ -4,8 +4,7 @@ package pres
 import cats.syntax.flatMap._
 import cats.syntax.functor._
 import cats.{Applicative, Monad, StackSafeMonad}
-import volga.syntax.arr._
-import volga.syntax.cat._
+import volga.syntax.all._
 import volga.syntax.comp._
 import cats.syntax.apply._
 import cats.syntax.semigroupal._
@@ -87,7 +86,7 @@ object ConsoleArr {
   implicit val arrow: Arr[ConsoleArr] = new Arr[ConsoleArr] {
     def lift[A, B](f: A => B): ConsoleArr[A, B] = Lift(f)
 
-    def split[A, B, C, D](f: ConsoleArr[A, C], g: ConsoleArr[B, D]): ConsoleArr[(A, B), (C, D)] = Split(f, g)
+    def split[A, B, C, D](f: ConsoleArr[A, B], g: ConsoleArr[C, D]): ConsoleArr[(A, C), (B, D)] = Split(f, g)
 
     def compose[A, B, C](f: ConsoleArr[B, C], g: ConsoleArr[A, B]): ConsoleArr[A, C] = AndThen(g, f)
   }

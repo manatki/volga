@@ -130,7 +130,7 @@ class SyntaxMacro(val c: blackbox.Context) extends Unappliers {
                 }
                 if (reused.nonEmpty || unused.nonEmpty) c.abort(c.enclosingPosition, "error in variable use")
 
-                implicit val xsymbol: ComposeSymbol = ComposeSymbol(x)
+                implicit val xsymbol: ComposeSymbol = new ComposeSymbol(x)
 
                 val connectUpdater =
                   chain.to[List[Connect[ComInfo]]](parse.inOuts(withLaterUse)) >
@@ -141,7 +141,7 @@ class SyntaxMacro(val c: blackbox.Context) extends Unappliers {
 
                 val connects =
                   connectUpdater
-                    .update(n => ComInfo(Some(n), typeMap(n)))
+                    .update(n => new ComInfo(Some(n), typeMap(n)))
                     .parTraverse(parse.binTransfers[ComInfo])
                     .fold(reportConnectErrors, identity)
                     .map(
@@ -182,16 +182,16 @@ class SyntaxMacro(val c: blackbox.Context) extends Unappliers {
     case l => (List(), ParseElem.Other(l))
   }
 
-  final case class ComposeSymbol(t: Type)
+  final class ComposeSymbol(val t: Type)
 
-  final case class ComInfo(name: Option[TermName], typ: Type)
+  final class ComInfo(val name: Option[TermName], val typ: Type)
 
   object ComInfo {
     implicit def pmagma(implicit compose: ComposeSymbol): PMagma[ComInfo] = new PMagma[ComInfo] {
-      val empty: ComInfo = ComInfo(None, NoType)
+      val empty: ComInfo = new ComInfo(None, NoType)
 
       def combine(x: ComInfo, y: ComInfo): ComInfo =
-        ComInfo(None, appliedType(compose.t, List(x.typ, y.typ)))
+        new ComInfo(None, appliedType(compose.t, List(x.typ, y.typ)))
     }
   }
 }

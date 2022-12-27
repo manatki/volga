@@ -4,8 +4,7 @@ import cats.arrow.Arrow
 import cats.data.Kleisli
 import syntax.comp._
 import cats.instances.list._
-import syntax.cat._
-import syntax.arr._
+import syntax.all._
 
 import scala.Function.tupled
 
@@ -19,7 +18,7 @@ object Chepukku {
     implicit val arr: Arr[LK] = new Arr[LK] {
       def lift[A, B](f: A => B): LK[A, B]                           = a => List(f(a))
 
-      def split[A, B, C, D](f: LK[A, C], g: LK[B, D]): LK[(A, B), (C, D)] = {
+      def split[A, B, C, D](f: LK[A, B], g: LK[C, D]): LK[(A, C), (B, D)] = {
         case (a, c) => for (b <- f.run(a); d <- g.run(c)) yield (b, d)
       }
 

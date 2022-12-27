@@ -1,14 +1,15 @@
 package volga
 import cats.arrow.{Arrow, ArrowChoice}
 import simulacrum.{op, typeclass}
+import syntax.Summoner
 
 trait ArrLike[->[_, _]]
 
 object ArrLike extends ArrInstanceChain[ArrLike]
-trait Arr[->[_, _]] extends Cat[->] with ArrLike[->] {
+trait Arr[->[_, _]] extends Cat[->] with ArrLike[->] with SemCatLike[->, (*, *)] {
   def lift[A, B](f: A => B): A -> B
 
-  def split[A, B, C, D](f: A -> C, g: B -> D): (A, B) -> (C, D)
+  def split[A, B, C, D](f: A -> B, g: C -> D): (A, C) -> (B, D)
 
   def proj1[A, B]: (A, B) -> A = lift(_._1)
   def proj2[A, B]: (A, B) -> B = lift(_._2)
@@ -54,7 +55,7 @@ trait Arr[->[_, _]] extends Cat[->] with ArrLike[->] {
     }
 }
 
-object Arr extends ArrInstanceChain[Arr]
+object Arr extends ArrInstanceChain[Arr] with Summoner[Arr]
 
 trait ArrChoice[->[_, _]] extends Arr[->] {
   def choose[A, B, C, D](f: A -> C)(g: B -> D): Either[A, B] -> Either[C, D]
@@ -89,7 +90,7 @@ trait ArrInstanceChain[TC[a[_, _]] >: Arr[a]] {
   implicit def arrowFromCats[->[_, _]](implicit arr: Arrow[->]): TC[->] =
     new Arr[->] {
       def lift[A, B](f: A => B): A -> B                             = arr.lift(f)
-      def split[A, B, C, D](f: A -> C, g: B -> D): (A, B) -> (C, D) = arr.split(f, g)
+      def split[A, B, C, D](f: A -> B, g: C -> D): (A, C) -> (B, D) = arr.split(f, g)
       def compose[A, B, C](f: B -> C, g: A -> B): A -> C            = arr.compose(f, g)
     }
 }
@@ -98,7 +99,7 @@ trait ArrChoiceInstanceChain[TC[a[_, _]] >: ArrChoice[a]] {
   implicit def arrowChoiceFromCats[->[_, _]](implicit arr: ArrowChoice[->]): TC[->] =
     new ArrChoice[->] {
       def lift[A, B](f: A => B): A -> B                                          = arr.lift(f)
-      def split[A, B, C, D](f: A -> C, g: B -> D): (A, B) -> (C, D)              = arr.split(f, g)
+      def split[A, B, C, D](f: A -> B, g: C -> D): (A, C) -> (B, D)              = arr.split(f, g)
       def compose[A, B, C](f: B -> C, g: A -> B): A -> C                         = arr.compose(f, g)
       def choose[A, B, C, D](f: A -> C)(g: B -> D): Either[A, B] -> Either[C, D] = arr.choose(f)(g)
     }

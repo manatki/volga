@@ -14,7 +14,7 @@ object Kleisli {
     final def app[A, B]: Kleisli[F, (A, Kleisli[F, A, B]), B] = { case (a, fab) => fab.run(a) }
     final def lift[A, B](f: A => B): Kleisli[F, A, B]         = f(_).pure[F]
 
-    final def split[A, B, C, D](f: Kleisli[F, A, C], g: Kleisli[F, B, D]): Kleisli[F, (A, B), (C, D)] = {
+    final def split[A, B, C, D](f: Kleisli[F, A, B], g: Kleisli[F, C, D]): Kleisli[F, (A, C), (B, D)] = {
       case (a, b) => Parallel.parTuple2(f.run(a), g.run(b))
     }
 

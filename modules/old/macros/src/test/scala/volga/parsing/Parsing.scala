@@ -10,9 +10,8 @@ import cats.implicits._
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import volga.data.Dikleisli
-import volga.syntax.cat._
+import volga.syntax.all._
 import volga.syntax.comp._
-import volga.syntax.symmon._
 import mouse.string._
 import volga.control.MPar
 
