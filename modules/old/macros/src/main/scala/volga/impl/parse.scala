@@ -15,7 +15,7 @@ import cats.syntax.traverse._
 import monocle.PLens
 import monocle.function.all._
 import monocle.macros.{Lenses, PLenses}
-import monocle.syntax.apply._
+import monocle.syntax.all._
 import volga.solve.{Bin, BinRes, PMagma}
 
 import scala.annotation.tailrec
@@ -36,14 +36,14 @@ final case class Collect[A, M, I, O](
     multis: Map[M, Assoc[A, List[I], Vector[Option[O]]]] = Map.empty[M, Nothing]
 ) {
   private def add(s: Either[M, Assoc[A, List[I], List[O]]]) =
-    this &|-> Collect.singles modify (s :: _)
+    this.lens(_.singles).modify(s :: _)
 
   def addSingle(app: A, ins: List[I], out: O) =
     add(Right(Assoc(app, ins, List(out))))
   def startMultiIn(app: A, ins: List[I], m: M, arity: Int) =
-    add(Left(m)) &|-> Collect.multis ^|-> at(m) set Some(Assoc(app, ins, Vector.fill[Option[O]](arity)(None)))
+    add(Left(m)).focus(_.multis).at(m).replace(Some(Assoc(app, ins, Vector.fill[Option[O]](arity)(None))))
   def addMultiOut(m: M, idx: Int, out: O) =
-    this &|-> Collect.multis ^|-? index(m) ^|-> Assoc.out1 ^|-? index(idx) set Some(out)
+    this.focus(_.multis).index(m).composeLens(Assoc.out1).index(idx).replace(Some(out))
 
   def assocs: List[Assoc[A, List[I], List[O]]] =
     singles.map {
