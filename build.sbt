@@ -2,12 +2,14 @@ name := "volga"
 
 val publishVersion = "0.2"
 
+crossScalaVersions := List("3.1.2", "2.13.10")
+
 val oldSettings = Vector(
   libraryDependencies ++= List(
     "org.typelevel" %% "cats-core"     % "2.8.0",
     "dev.optics"    %% "monocle-macro" % "3.1.0",
-    "tf.tofu"       %% "glass-core"    % "0.2.0",
-    "tf.tofu"       %% "glass-macro"   % "0.2rel.0",
+    "tf.tofu"       %% "glass-core"    % "0.2.1",
+    "tf.tofu"       %% "glass-macro"   % "0.2.1",
     "org.typelevel" %% "simulacrum"    % "1.0.1",
   ),
   libraryDependencies ++= List(
@@ -22,8 +24,8 @@ val oldSettings = Vector(
       compilerPlugin("org.typelevel" % "kind-projector"      % "0.13.2" cross CrossVersion.patch),
       compilerPlugin("com.olegpy"    %% "better-monadic-for" % "0.3.1")
     ),
-  scalaVersion := "2.13.9",
-  crossScalaVersions := List("2.13.9"),
+  scalaVersion := "2.13.10",
+  crossScalaVersions := List("2.13.10"),
   scalacOptions ++=
     List(
       "-language:higherKinds",
@@ -54,6 +56,7 @@ lazy val volga =
 lazy val commonSettings = Vector(
   scalaVersion := "3.1.3",
   libraryDependencies += "org.typelevel" %% "cats-core" % "2.8.0",
+  crossScalaVersions := List("3.1.2"),
 )
 
 lazy val core =
@@ -69,11 +72,6 @@ lazy val publishSettings = List(
       "git@github.com:manatki/derevo.git"
     )
   ),
-  publishTo := {
-    if (isSnapshot.value) {
-      Some(Opts.resolver.sonatypeSnapshots)
-    } else sonatypePublishToBundle.value
-  },
   developers := List(
     Developer(
       "odomontois",
