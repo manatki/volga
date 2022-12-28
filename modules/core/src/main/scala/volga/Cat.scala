@@ -27,11 +27,13 @@ transparent trait Aliases[H[_, _], U[_]] extends HomAliases[H] with ObAliases[U]
   type TheCartesian = CartesianCat[H, U]
   type TheClosed    = ClosedCat[H, U]
 
-  def theCat(using c: TheCat): TheCat = c
-  def theMonoidal( using c: TheMonoidal): TheMonoidal = c
-  def theSymmetric( using c: TheSymmetric): TheSymmetric = c
-  def theCartesian( using c: TheCartesian): TheCartesian = c
-  def theClosed( using c: TheClosed): TheClosed = c
+  def theCat(using c: TheCat): TheCat                   = c
+  def theMonoidal(using c: TheMonoidal): TheMonoidal    = c
+  def theSymmetric(using c: TheSymmetric): TheSymmetric = c
+  def theCartesian(using c: TheCartesian): TheCartesian = c
+  def theClosed(using c: TheClosed): TheClosed          = c
+
+  def ob[A](using o: Ob[A]): Ob[A] = o
 
   def ident[X: Ob](using c: TheCat): X --> X     = c.ident
   def identIso[X: Ob](using c: TheCat): X <--> X = c.identIso
@@ -148,8 +150,7 @@ trait CartesianCat[H[_, _], U[_]] extends SymmetricCat[H, U]:
   override def rightUnit[A: Ob]: (A x I) <--> A = Iso(projectLeft, product(identity, terminal))
   override def leftUnit[A: Ob]: (I x A) <--> A  = Iso(projectRight, product(terminal, identity))
 
-  extension [A: Ob, B: Ob](f: A --> B)
-    def <> [C: Ob](g: A --> C): A --> (B x C) = product(f, g)
+  extension [A: Ob, B: Ob](f: A --> B) def <>[C: Ob](g: A --> C): A --> (B x C) = product(f, g)
 
 trait CocartesianCat[H[_, _], U[_]] extends Cat[H, U]:
   given zeroOb: Ob[O]

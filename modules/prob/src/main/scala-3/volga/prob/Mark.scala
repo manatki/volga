@@ -41,3 +41,11 @@ object Mark extends FreeSMC[MarkQ, FreeU] with Aliases[Mark, FreeU]:
     lift((x: A) => if p(x) then Right(x) else Left(())) >>> split >>> (fail >< ident) >>> lconsume
   val range1                                                           = range(1) // event with guaranteed prob = 1
   val unit: I --> $[Unit]                                              = range1 >>> lift(_ => ())
+
+  def failAll[A: Ob]: A --> I = ob[A] match
+    case _: FreeObj.Scala[a]   => lift((_: a) => ()) >>> fail
+    case FreeObj.One           => ident
+    case p: FreeObj.Prod[x, y] => 
+      given Ob[x] = p.l
+      given Ob[y] = p.r
+      (failAll[x] >< failAll[y]) >>> rconsume
