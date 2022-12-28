@@ -19,31 +19,26 @@ import monocle.syntax.all._
 import volga.solve.{Bin, BinRes, PMagma}
 
 import scala.annotation.tailrec
+import scala.annotation.nowarn
 
-@PLenses
 final case class Assoc[A, I, O](app: A, in: I, out: O) {
   def modOut[O1](f: O => O1) = copy(out = f(out))
   def modApp[A1](f: A => A1) = copy(app = f(app))
 }
-object Assoc {
-  def out1[A, I, O, O1]: PLens[Assoc[A, I, O], Assoc[A, I, O1], O, O1] = out
-  def app1[A, I, O, A1]: PLens[Assoc[A, I, O], Assoc[A1, I, O], A, A1] = app
-}
 
-@Lenses
 final case class Collect[A, M, I, O](
     singles: List[Either[M, Assoc[A, List[I], List[O]]]] = Nil,
     multis: Map[M, Assoc[A, List[I], Vector[Option[O]]]] = Map.empty[M, Nothing]
 ) {
-  private def add(s: Either[M, Assoc[A, List[I], List[O]]]) =
-    this.lens(_.singles).modify(s :: _)
+  private def add(s: Either[M, Assoc[A, List[I], List[O]]]): Collect[A, M, I, O] =
+    this.focus(_.singles).modify (s :: _)
 
   def addSingle(app: A, ins: List[I], out: O) =
     add(Right(Assoc(app, ins, List(out))))
   def startMultiIn(app: A, ins: List[I], m: M, arity: Int) =
-    add(Left(m)).focus(_.multis).at(m).replace(Some(Assoc(app, ins, Vector.fill[Option[O]](arity)(None))))
+    add(Left(m)).focus(_.multis).at(m) replace Some(Assoc(app, ins, Vector.fill[Option[O]](arity)(None)))
   def addMultiOut(m: M, idx: Int, out: O) =
-    this.focus(_.multis).index(m).composeLens(Assoc.out1).index(idx).replace(Some(out))
+    this.focus(_.multis).index(m).modify(_.focus(_.out).index(idx).replace(Some(out)))
 
   def assocs: List[Assoc[A, List[I], List[O]]] =
     singles.map {
@@ -121,7 +116,7 @@ object parse {
           case (coll, acc, m) =>
             val coll1 = last.fold(coll) { case (t, x, ins, out) => coll.addSingle(t -> x, ins, out) }
             splitUsage(prependUnless(coll1.assocs, acc, coll1.isEmpty).reverse, in).map { bodyX =>
-              val body = Functor[List].compose[List].map(bodyX)(Assoc.app1.modify(_._1))
+              val body = Functor[List].compose[List].map(bodyX)(_.modApp(_._1))
               (m, Assoc(body, in = in, out = out))
             }
         }

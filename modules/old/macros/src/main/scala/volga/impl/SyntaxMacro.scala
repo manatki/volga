@@ -20,6 +20,7 @@ import volga.syntax.comp
 
 import scala.reflect.macros.{TypecheckException, blackbox}
 import scala.util.control.NonFatal
+import scala.annotation.nowarn
 
 class SyntaxMacro(val c: blackbox.Context) extends Unappliers {
   import c.universe._
@@ -29,7 +30,7 @@ class SyntaxMacro(val c: blackbox.Context) extends Unappliers {
     def res: Type
 
     def combineType(xs: List[Type]): Tree = this match {
-      case Arrow(_, _) => tq"(..$xs)"
+      case Arrow(_, _)        => tq"(..$xs)"
       case SymMon(_, x, _, _) =>
         val resT = xs.reduceLeft((a, b) => appliedType(x, List(a, b)))
         tq"$resT"
@@ -38,7 +39,7 @@ class SyntaxMacro(val c: blackbox.Context) extends Unappliers {
     def ident(t: Tree): Tree = q"$compS.ident[$P, $t]"
   }
 
-  case class Arrow(P: Type, res: Type) extends Mode
+  case class Arrow(P: Type, res: Type)                    extends Mode
   case class SymMon(P: Type, x: Type, I: Type, res: Type) extends Mode {
     def smc: Tree = q"$compS.smc[$P, $x, $I]"
   }
@@ -46,7 +47,7 @@ class SyntaxMacro(val c: blackbox.Context) extends Unappliers {
   def midTerm  = c.freshName(TermName("mid"))
   val lastTerm = c.freshName(TermName("last"))
 
-  def arr[P: WeakTypeTag, R: WeakTypeTag](body: c.Tree)(vb: Tree): c.Tree =
+  def arr[P: WeakTypeTag, R: WeakTypeTag](body: c.Tree)(vb: Tree): c.Tree                                    =
     generateSyntax(body)(Arrow(weakTypeOf[P].typeConstructor, weakTypeOf[R]))
   def symmon[P: WeakTypeTag, x: WeakTypeTag, I: WeakTypeTag, R: WeakTypeTag](body: c.Tree)(vb: Tree): c.Tree =
     generateSyntax(body)(
@@ -81,9 +82,9 @@ class SyntaxMacro(val c: blackbox.Context) extends Unappliers {
         c.typecheck(q"$smc.assocl[$l, $m, $r]")
       case BinHistory.HRotate(R, l, m, r) =>
         c.typecheck(q"$smc.assocr[$l, $m, $r]")
-      case BinHistory.HSwap(l, r) =>
+      case BinHistory.HSwap(l, r)         =>
         c.typecheck(q"$smc.swap[$l, $r]")
-      case BinHistory.HSplit(lc, rc) =>
+      case BinHistory.HSplit(lc, rc)      =>
         val HChain(lstart, lend, lhistory) = lc
         val HChain(rstart, rend, rhistory) = rc
         val ltree                          = constructSMCConnectOrId(lhistory, lend)
@@ -107,16 +108,19 @@ class SyntaxMacro(val c: blackbox.Context) extends Unappliers {
       case q"(..$xs) => $b" =>
         b match {
           case q"{..$ls}" =>
-            val xns = xs.collect { case ValDef(_, name, VarTyp(tt), _) => (name, tt) }.toList
-            val ps  = parse.collectBody(ls.toList, xns.map(_._1), matchElem)
-            val (outTypes, parsed) = ps.fold({
-              case (to, x) => c.abort(to.fold(c.enclosingPosition)(_.pos), x + to.toString)
-            }, identity)
+            val xns                          = xs.collect { case ValDef(_, name, VarTyp(tt), _) => (name, tt) }.toList
+            val ps                           = parse.collectBody(ls.toList, xns.map(_._1), matchElem)
+            val (outTypes, parsed)           = ps.fold(
+              { case (to, x) =>
+                c.abort(to.fold(c.enclosingPosition)(_.pos), x + to.toString)
+              },
+              identity
+            )
             val typeMap: Map[TermName, Type] = ((lastTerm -> mode.res) +: xns ++: outTypes).toMap
             val withLaterUse                 = parse.addLaterUse(parsed)
             val flow                         = withLaterUse.app.map(_.map(getOrPass(typeMap)).reduce((a, b) => q"($a.split($b))"))
             mode match {
-              case Arrow(p, r) =>
+              case Arrow(p, r)                  =>
                 val connects             = parse.inOuts(withLaterUse).map(constructArrConnect(p, typeMap))
                 val res                  = parse.alternate(connects, flow).reduce((x, y) => q"($x.andThen($y))")
                 val Assoc(body, in, out) = withLaterUse
@@ -125,8 +129,8 @@ class SyntaxMacro(val c: blackbox.Context) extends Unappliers {
               case symMode @ SymMon(p, x, i, r) =>
                 val (reused, unused) = parse.preventReuse(parsed)
                 reused.foreach { case (t, n) => c.error(t.pos, s"variable $n is used second time") }
-                unused.foreach {
-                  case (t, n) => c.error(t.fold(c.enclosingPosition)(_.pos), s"variable $n is not used")
+                unused.foreach { case (t, n) =>
+                  c.error(t.fold(c.enclosingPosition)(_.pos), s"variable $n is not used")
                 }
                 if (reused.nonEmpty || unused.nonEmpty) c.abort(c.enclosingPosition, "error in variable use")
 
@@ -141,12 +145,10 @@ class SyntaxMacro(val c: blackbox.Context) extends Unappliers {
 
                 val connects =
                   connectUpdater
-                    .update(n => new ComInfo(Some(n), typeMap(n)))
+                    .update(n => ComInfo(Some(n), typeMap(n)))
                     .parTraverse(parse.binTransfers[ComInfo])
                     .fold(reportConnectErrors, identity)
-                    .map(
-                      res => constructSMCConnect(res.history.map(_.map(_.typ)))(symMode)
-                    )
+                    .map(res => constructSMCConnect(res.history.map(_.map(_.typ)))(symMode))
 
                 val res = parse
                   .alternateOpt(connects, flow.map(_.some))
@@ -154,44 +156,46 @@ class SyntaxMacro(val c: blackbox.Context) extends Unappliers {
 
                 res.some
             }
-          case _ => none
+          case _          => none
         }
-      case _ => none
+      case _                => none
     }
-    val res = resOpt.getOrElse(c.abort(c.enclosingPosition, "unexpected syntax"))
+    val res    = resOpt.getOrElse(c.abort(c.enclosingPosition, "unexpected syntax"))
 
     res
   }
 
-  def reportConnectErrors(xs: NonEmptyList[String]): Nothing = c.abort(c.enclosingPosition, "there were errors")
+  def reportConnectErrors(xs: NonEmptyList[String]): Nothing =
+    c.abort(c.enclosingPosition, s"there were errors : ${xs.mkString_(",")}")
 
   def matchElem[A](t: Tree, last: Boolean): (List[(TermName, Type)], ParseElem[Tree, TermName]) = t match {
-    case ValDef(_, name, VarTyp(tt), ArrSyn(smth, args)) => (List(name -> tt), ParseElem.Single(args, name, smth))
-    case ValDef(_, name, VarTyp(tt), VarElem(v, i))      => (List(name -> tt), ParseElem.MultiAdd(v, name, i - 1))
+    case ValDef(_, name, VarTyp(tt), ArrSyn(smth, args))                                      => (List(name -> tt), ParseElem.Single(args, name, smth))
+    case ValDef(_, name, VarTyp(tt), VarElem(v, i))                                           => (List(name -> tt), ParseElem.MultiAdd(v, name, i - 1))
     case ValDef(mods, name, tt, Match(ArrSyn(smth, args), _)) if mods.hasFlag(Flag.SYNTHETIC) =>
       val arity = tt.tpe match {
         case TypeRef(_, _, xs) => xs.length
         case _                 => 0
       }
       (List(), ParseElem.MultiStart(args, name, smth, arity))
-    case q"${Break()}"          => (List(), ParseElem.Split)
-    case q"(..${Names(names)})" => (List(), ParseElem.Result(names))
-    case ArrSyn(smth, args) =>
+    case q"${Break()}"                                                                        => (List(), ParseElem.Split)
+    case q"(..${Names(names)})"                                                               => (List(), ParseElem.Result(names))
+    case ArrSyn(smth, args)                                                                   =>
       val name = if (last) lastTerm else midTerm
       (List(), ParseElem.MultiStart(args, name, smth, 0))
-    case l => (List(), ParseElem.Other(l))
+    case l                                                                                    => (List(), ParseElem.Other(l))
   }
 
   final class ComposeSymbol(val t: Type)
 
-  final class ComInfo(val name: Option[TermName], val typ: Type)
+  @nowarn("msg=The outer reference")
+  final case class ComInfo(val name: Option[TermName], val typ: Type)
 
   object ComInfo {
     implicit def pmagma(implicit compose: ComposeSymbol): PMagma[ComInfo] = new PMagma[ComInfo] {
-      val empty: ComInfo = new ComInfo(None, NoType)
+      val empty: ComInfo = ComInfo(None, NoType)
 
       def combine(x: ComInfo, y: ComInfo): ComInfo =
-        new ComInfo(None, appliedType(compose.t, List(x.typ, y.typ)))
+        ComInfo(None, appliedType(compose.t, List(x.typ, y.typ)))
     }
   }
 }
@@ -231,7 +235,7 @@ trait Unappliers {
   }
 
   object VarElem {
-    val sub = "_(\\d+)".r
+    val sub                                          = "_(\\d+)".r
     def unapply(tree: Tree): Option[(TermName, Int)] =
       tree match {
         case q"${n: TermName}.${TermName(sub(i))}" =>
@@ -239,7 +243,7 @@ trait Unappliers {
           catch {
             case NonFatal(_) => None
           }
-        case _ => None
+        case _                                     => None
       }
   }
 
