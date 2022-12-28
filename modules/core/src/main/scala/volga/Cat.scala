@@ -21,6 +21,33 @@ transparent trait ObAliases[U[_]]:
 transparent trait Aliases[H[_, _], U[_]] extends HomAliases[H] with ObAliases[U]:
   infix type <-->[A, B] = Iso[H, U, A, B]
 
+  type TheCat       = Cat[H, U]
+  type TheMonoidal  = MonoidalCat[H, U]
+  type TheSymmetric = SymmetricCat[H, U]
+  type TheCartesian = CartesianCat[H, U]
+  type TheClosed    = ClosedCat[H, U]
+
+  def theCat(using c: TheCat): TheCat = c
+  def theMonoidal( using c: TheMonoidal): TheMonoidal = c
+  def theSymmetric( using c: TheSymmetric): TheSymmetric = c
+  def theCartesian( using c: TheCartesian): TheCartesian = c
+  def theClosed( using c: TheClosed): TheClosed = c
+
+  def ident[X: Ob](using c: TheCat): X --> X     = c.ident
+  def identIso[X: Ob](using c: TheCat): X <--> X = c.identIso
+
+  def lunit[X: Ob](using c: TheMonoidal): (I x X) <--> X = c.leftUnit
+  def runit[X: Ob](using c: TheMonoidal): (X x I) <--> X = c.rightUnit
+
+  def lspawn[X: Ob](using TheMonoidal): X --> (I x X) = lunit.from
+  def rspawn[X: Ob](using TheMonoidal): X --> (X x I) = runit.from
+
+  def lconsume[X: Ob](using TheMonoidal): (I x X) --> X = lunit.to
+  def rconsume[X: Ob](using TheMonoidal): (X x I) --> X = runit.to
+
+  def pi1[X: Ob, Y: Ob](using c: TheCartesian): (X, Y) --> X = c.pi1
+  def pi2[X: Ob, Y: Ob](using c: TheCartesian): (X, Y) --> Y = c.pi2
+
 trait Iso[H[_, _], U[_], A, B] extends Aliases[H, U]:
   self =>
   def to: H[A, B]
@@ -70,7 +97,7 @@ trait Cat[H[_, _], U[_]] extends Aliases[H, U]:
 
 object Cat:
   open class IsoImpl[H[_, _], U[_]](using U: Cat[H, U]) extends Cat[[x, y] =>> Iso[H, U, x, y], U]:
-    def identity[A: Ob]: Iso[H, U, A, A]                                 = new:
+    def identity[A: Ob]: Iso[H, U, A, A]                              = new:
       val from = U.identity
       val to   = U.identity
     def compose[A: Ob, B: Ob, C: Ob](f: B --> C, g: A --> B): A --> C =
@@ -120,6 +147,9 @@ trait CartesianCat[H[_, _], U[_]] extends SymmetricCat[H, U]:
 
   override def rightUnit[A: Ob]: (A x I) <--> A = Iso(projectLeft, product(identity, terminal))
   override def leftUnit[A: Ob]: (I x A) <--> A  = Iso(projectRight, product(terminal, identity))
+
+  extension [A: Ob, B: Ob](f: A --> B)
+    def <> [C: Ob](g: A --> C): A --> (B x C) = product(f, g)
 
 trait CocartesianCat[H[_, _], U[_]] extends Cat[H, U]:
   given zeroOb: Ob[O]
