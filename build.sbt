@@ -2,7 +2,10 @@ name := "volga"
 
 val publishVersion = "0.2"
 
-crossScalaVersions := List("3.1.3", "2.13.10")
+val scala3version  = "3.2.1"
+val scala2version = "2.13.10"
+
+crossScalaVersions := List(scala3version, scala2version)
 
 publish / skip := true
 
@@ -14,9 +17,6 @@ val oldMacroDeps = List(
 )
 
 val modules = file("modules")
-
-
-
 
 val publishSettings = List(
   moduleName        := { "volga-" + name.value },
@@ -46,15 +46,20 @@ val publishSettings = List(
 )
 
 val commonSettings = Vector(
-  scalaVersion                           := "3.1.3",
+  scalaVersion                           := scala3version,
   libraryDependencies += "org.typelevel" %% "cats-core" % "2.8.0",
-  crossScalaVersions                     := List("3.1.2")
+  crossScalaVersions                     := List(scala3version),
+  scalacOptions ++= Vector("-source", "future")
 )
 
-lazy val core = project.in(modules / "core").settings(commonSettings)
+lazy val core = project
+  .in(modules / "core")
+  .settings(
+    commonSettings,
+    libraryDependencies += "net.sourceforge.plantuml" % "plantuml" % "1.2022.14" % Test
+  )
 
 lazy val prob = project.in(modules / "prob").settings(commonSettings).dependsOn(core)
-
 
 val oldSettings = Vector(
   libraryDependencies ++= List(
@@ -76,8 +81,8 @@ val oldSettings = Vector(
       compilerPlugin("org.typelevel" % "kind-projector"     % "0.13.2" cross CrossVersion.patch),
       compilerPlugin("com.olegpy"   %% "better-monadic-for" % "0.3.1")
     ),
-  scalaVersion       := "2.13.10",
-  crossScalaVersions := List("2.13.10"),
+  scalaVersion       := scala2version,
+  crossScalaVersions := List(scala2version),
   scalacOptions ++=
     List(
       "-language:higherKinds",

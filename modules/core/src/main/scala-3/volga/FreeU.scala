@@ -1,5 +1,7 @@
 package volga
 
+import volga.ObAliases
+import volga.tags.{Obj, One, Tensor, Scala}
 sealed trait FreeU[X]
 
 enum FreeObj[X] extends FreeU[tags.Obj[X]]:
