@@ -1,4 +1,5 @@
 package volga
+package diag
 import net.sourceforge.plantuml.SourceStringReader;
 import java.io.{OutputStream}
 import java.io.ByteArrayOutputStream
@@ -16,7 +17,7 @@ import java.awt.Toolkit
                | [Lol]
                | [Kek]
                | [Cheb]
-               | Lol --> Kek
+               | Lol --> Kek : a
                | Lol --> Cheb
                | Cheb --> Kek
                |@enduml
