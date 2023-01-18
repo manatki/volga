@@ -1,4 +1,5 @@
 package volga
+package free
 
 import volga.ObAliases
 import volga.tags.{Obj, One, Tensor, Scala}
