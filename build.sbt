@@ -49,7 +49,7 @@ val commonSettings = Vector(
   scalaVersion                           := scala3version,
   libraryDependencies += "org.typelevel" %% "cats-core" % "2.8.0",
   crossScalaVersions                     := List(scala3version),
-  scalacOptions ++= Vector("-source", "future")
+  scalacOptions ++= Vector("-source", "future", "-Ykind-projector:underscores")
 )
 
 lazy val core = project
