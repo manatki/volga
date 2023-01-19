@@ -1,4 +1,4 @@
-package volga
+package volga.free
 
 import volga.tags.Tensor
 

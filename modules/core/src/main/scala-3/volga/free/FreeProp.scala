@@ -1,11 +1,12 @@
 package volga
-package diag
+package free
 
 import volga.tags.Obj
 
 import volga.tags.Tensor
 import volga.tags.One
 
+import volga.free.Nat
 type PropOb[T] = T match
     case tags.Obj[n]       => Nat[n]
     case tags.One          => Nat.Zero
@@ -23,6 +24,7 @@ enum FreeProp[+H[_, _], A, B]:
         C: Nat[C],
         D: Nat[D]
     )                                                                                        extends FreeProp[H, Nat.Plus[A, C], Nat.Plus[B, D]]
+    case Swap                                                                                extends FreeProp[Nothing, Nat.`2`, Nat.`2`]
 
     def link0[H_, H1[x, y] >: H[x, y] <: H_](using A0: A =:= Nat.Zero, B0: B =:= Nat.Zero): Vector[(H_, H_)] =
         val h0 = A0.liftCo[FreeProp[H, _, B]].andThen(B0.liftCo[FreeProp[H, Nat.Zero, _]])(this)
@@ -67,6 +69,10 @@ object FreeProp:
     ): (Nat.Vec[M, H_], Vector[(H_, H_)]) =
         p match
             case Id()                                                              => (inbound, Vector.empty)
+            case Swap                                                              =>
+                val (x, y) = Nat.teq[N, Nat.`2`].liftCo[Nat.Vec[_, H_]](inbound)
+                val res    = Nat.teq[Nat.`2`, M].liftCo[Nat.Vec[_, H_]]((y, x))
+                (res, Vector.empty)
             case Embed(h)                                                          =>
                 val links    = inbound.toVector.map((_, h))
                 val outbound = Nat.Vec.replicate[M, H_](h)

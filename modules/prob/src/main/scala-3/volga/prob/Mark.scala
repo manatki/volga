@@ -8,8 +8,8 @@ import volga.tags.One
 
 import volga.{Aliases, HasScalaFunctor}
 import volga.tags.{Obj, One, Tensor, Scala}
-import volga.{FreeObj, FreeU}
-import volga.FreeSMC
+import volga.free.{FreeObj, FreeU}
+import volga.free.FreeSMC
 //forbidding Copying for now
 case class Copying[A](absurd: Nothing)
 

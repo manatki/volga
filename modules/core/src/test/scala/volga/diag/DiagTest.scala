@@ -8,26 +8,45 @@ import javax.swing.ImageIcon
 import javax.swing.JLabel
 import javax.swing.WindowConstants
 import java.awt.Toolkit
+import volga.free.Nat
 import Nat.{OfInt, Zero, Succ}
 
+import volga.free.Nat
+
+import volga.free.FreeProp
 type Label[A, B]            = String
 type TT[N <: Int, M <: Int] = FreeProp[Label, Nat.OfInt[N], Nat.OfInt[M]]
 
 def node(name: String, x: Int, y: Int): TT[x.type, y.type] = FreeProp.Embed(name)
 
 val xxx = {
-    val a = node("a", 0, 1)
-    val b = node("b", 1, 0)
-    a >>> b
+    val i = node("I", 0, 1)
+    val o = node("O", 1, 0)
+    i >>> o
 }
 
 val yyy = {
-    val a = node("a", 0, 2)
+    val a = node("a", 0, 3)
     val b = node("b", 1, 2)
     val c = node("c", 2, 1)
-    val d = node("d", 2, 0)
+    val d = node("d", 3, 0)
 
-    a >>> (FreeProp.idInt[1] >< b) >>> (c >< FreeProp.idInt[1]) >>> d
+    a >>>
+        (FreeProp.idInt[1] >< b >< FreeProp.idInt[1]) >>>
+        (FreeProp.idInt[2] >< FreeProp.Swap) >>>
+        (FreeProp.idInt[1] >< c >< FreeProp.idInt[1]) >>>
+        d
+}
+
+val zzz = {
+    val x1 = node("X1", 0, 2)
+    val x2 = node("X2", 0, 2)
+    val y1 = node("Y1", 2, 0)
+    val y2 = node("Y2", 2, 0)
+
+    (x1 >< x2) >>>
+    (FreeProp.idInt[1] >< FreeProp.Swap >< FreeProp.idInt[1]) >>>
+    (y1 >< y2)
 }
 
 def showGraph(l: FreeProp[Label, Zero, Zero]): Unit =
@@ -56,5 +75,5 @@ def showDiagram(uml: String): Unit =
 end showDiagram
 
 @main def DiagTest(): Unit =
-    showGraph(yyy)
+    showGraph(xxx >< yyy >< zzz)
 end DiagTest

@@ -66,7 +66,7 @@ Let's say you have ` type Process[Input, Output]`, you want to use process compr
     ```scala
     proc: (Z1, Z2, ...) -> (Y1, Y2, ...)
     ```
-    or monoidal morpshism (note left associativity of products)
+    or monoidal morphism (note left associativity of products)
     ```scala
     proc: (Tensor(...(Tensor(Z1, Z2), ...) -> Tensor(...Tensor(Y1, Y2),..)
     ``` 
