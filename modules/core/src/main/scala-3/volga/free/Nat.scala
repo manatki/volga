@@ -1,4 +1,4 @@
-package volga.diag
+package volga.free
 
 import annotation.tailrec
 import compiletime.ops.int.{<=, -}
@@ -13,11 +13,17 @@ object Nat:
 
     given Nat[Zero] = Zero()
 
+    def teq[A, B](using eq: A =:= B): A =:= B = eq
+
     given [n](using n: Nat[n]): Nat[Succ[n]] = Succ(n)
 
     type Plus[x, y] = y match
         case Zero     => x
         case Succ[y1] => Succ[Plus[x, y1]]
+
+    type `0` = Zero    
+    type `1` = Succ[Zero]
+    type `2` = Succ[Succ[Zero]]
 
     def plus[n: Nat, m: Nat]: Nat[Plus[n, m]] = Nat[m] match
         case Zero()              => Nat[n]
@@ -32,7 +38,6 @@ object Nat:
 
     def rzero[n]: Plus[n, Zero] =:= n = <:<.refl
 
-    private def teq[A, B](using eq: A =:= B): A =:= B = eq
 
     inline def erase[A, B](inline proof: => A =:= B): A =:= B = <:<.refl.asInstanceOf[A =:= B]
 
