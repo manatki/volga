@@ -10,6 +10,9 @@ import scala.quoted.Type
 import volga.syntax.internal.{STerm, Pos, MParsing}
 import scala.quoted.ToExpr.SetToExpr
 import scala.{PartialFunction as =\>}
+import com.azul.crs.client.Result
+import scala.collection.View.Empty
+import free.Nat
 
 object smc:
     abstract final class Var[T]
@@ -19,12 +22,27 @@ object smc:
         case EmptyTuple => U[tags.One]
         case h *: t     => U[tags.Tensor[Reconstruct[U, h], Reconstruct[U, t]]]
         case Unit       => U[tags.One]
+        case EmptyTuple => U[tags.One]
+
+    type TResults[U[_], X] <: Tuple = X match
+        case Nat.Zero             => EmptyTuple
+        case Nat.Succ[n]          => Var[Nat.`1`] *: TResults[U, n]
+        case U[tags.Tensor[u, v]] => Results[U, u] *: TResults[U, v]
+        case U[tags.One]          => EmptyTuple
+        case _                    => Var[X] *: EmptyTuple
+
+    type Results[U[_], X] = X match
+        case Nat.Zero             => Unit
+        case Nat.Succ[n]          => Var[Nat.`1`] *: TResults[U, n]
+        case U[tags.Tensor[u, v]] => Results[U, u] *: TResults[U, v]
+        case U[tags.One]          => Unit
+        case _                    => Var[X]
 
     final abstract class SyApp[H[_, _], U[_]] extends Aliases[H, U]:
-        extension [A, B](f: H[A, B]) def apply(v: Var[A]): Var[B]
+        extension [A, B](f: H[A, B]) def apply(v: Var[A]): Results[U, B]
         extension [B](f: H[I, B]) def apply(): Var[B]
 
-    final class Syntax[H[_, _], U[_]](using c: SymmetricCat[H, U]) extends Aliases[H, U]:
+    final class Syntax[H[_, _], U[_]] extends Aliases[H, U]:
 
         def dummy[A, B]: H[A, B] = null.asInstanceOf[H[A, B]]
 
@@ -52,11 +70,11 @@ object smc:
             val tt = Expr(t.tpe.show)
             val s  = t match
                 case CFBlock(Block(mids, res)) =>
-                    val parsedMids = mids.collect(asMidSTerm)
+                    val parseds = (mids.map(asMidSTerm.lift) :+ asEndTerm.lift(res)).mkString("* ", "\n* ", "")
 
                     s"""|success 
                         |${t.show(using Printer.TreeStructure)}
-                        |$parsedMids""".stripMargin
+                        |$parseds""".stripMargin
 
                 case _ =>
                     s"""|failure
@@ -65,7 +83,6 @@ object smc:
             val printed = Expr(s)
             '{
                 println($printed)
-                println($tt)
                 $syn.dummy
             }
         end just

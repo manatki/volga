@@ -34,6 +34,6 @@ final class MParsing[q <: Quotes & Singleton](val q: q):
     val asApplication: Tree =\> App =
         case Apply(t, List(Apply(_, List(vars)))) =>
             STerm.Application(t, Vector())
-
+        
     val asAnywhereTerm: Tree =\> Anywhere = asApplication
 end MParsing
