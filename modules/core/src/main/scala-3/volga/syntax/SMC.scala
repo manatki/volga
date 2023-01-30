@@ -4,22 +4,90 @@ package syntax
 import volga.SymmetricCat
 
 import volga.{Aliases, SymmetricCat}
-object smc {
-  abstract final class Var[T]
+import scala.quoted.Quotes
+import scala.quoted.Expr
+import scala.quoted.Type
+import scala.{PartialFunction as =\>}
+import volga.syntax.internal.{STerm, Pos}
 
-  final class Syntax[H[_, _], U[_]](using c: SymmetricCat[H, U]) extends Aliases[H, U]:
-    final abstract class SyApp:
-      extension [A, B](f: H[A, B]) def apply(v: Var[A]): Var[B]
+object smc:
+    abstract final class Var[T]
 
-    type Reconstruct[X] = X match
-      case Var[a]     => a
-      case EmptyTuple => I
-      case h *: t     => Reconstruct[h] x Reconstruct[t]
+    type Reconstruct[U[_], X] = X match
+        case Var[a]     => a
+        case EmptyTuple => U[tags.One]
+        case h *: t     => U[tags.Tensor[Reconstruct[U, h], Reconstruct[U, t]]]
+        case Unit       => U[tags.One]
 
-    inline def apply[R](inline f: () => SyApp ?=> R): H[R, Reconstruct[R]] = null.asInstanceOf[Nothing]
-    inline def apply[A, B](inline f: Var[A] => SyApp ?=> B): H[A, Reconstruct[B]] = null.asInstanceOf[Nothing]
+    final abstract class SyApp[H[_, _], U[_]] extends Aliases[H, U]:
+        extension [A, B](f: H[A, B]) def apply(v: Var[A]): Var[B]
+        extension [B](f: H[I, B]) def apply(): Var[B]
 
-  end Syntax
+    final class Syntax[H[_, _], U[_]](using c: SymmetricCat[H, U]) extends Aliases[H, U]:
 
-  inline def syntax[H[_, _], U[_]](using SymmetricCat[H, U]): Syntax[H, U] = new Syntax
-}
+        def dummy[A, B]: H[A, B] = null.asInstanceOf[H[A, B]]
+
+        inline def just[R](inline block: SyApp[H, U] ?=> R): H[I, Reconstruct[U, R]] =
+            ${ justMacro[H, U, R]('this)('block) }
+
+        inline def apply[A, B](f: Var[A] => SyApp[H, U] ?=> B): H[A, Reconstruct[U, B]] =
+            null.asInstanceOf[Nothing]
+
+    end Syntax
+
+    private def justMacro[H[_, _]: Type, U[_]: Type, R: Type](syntax: Expr[Syntax[H, U]])(
+        block: Expr[SyApp[H, U] ?=> R]
+    )(using Quotes): Expr[H[U[tags.One], Reconstruct[U, R]]] = SMCMacro(syntax).just(block)
+
+    class SMCMacro[H[_, _], U[_]](syn: Expr[Syntax[H, U]])(using q: Quotes)(using Type[H], Type[U])
+        extends Aliases[H, U]:
+        import q.reflect.*
+        private val InlineTerm: Inlined =\> Term =
+            case Inlined(None, Nil, t) => t
+        private val CFBlock: Tree =\> Tree       =
+            case InlineTerm(
+                  Block(
+                    List(DefDef(nameD, _, _, Some(InlineTerm(Block(Nil, t))))),
+                    Closure(Ident(nameR), None)
+                  )
+                ) if nameD == nameR =>
+                t
+        end CFBlock
+
+        def just[R: Type](expr: Expr[SyApp[H, U] ?=> R]): Expr[H[I, Reconstruct[U, R]]] =
+            val t  = expr.asTerm
+            val tt = Expr(t.tpe.show)
+            val s  = t match
+                case CFBlock(t) =>
+                    s"""|success 
+                        |${t.show(using Printer.TreeStructure)}""".stripMargin
+                case _          =>
+                    s"""|failure
+                        |${expr.asTerm}""".stripMargin
+
+            val printed = Expr(s)
+            '{
+                println($printed)
+                println($tt)
+                $syn.dummy
+            }
+        end just
+
+        private type Mid      = STerm[Pos.Mid, String, Tree]
+        private type End      = STerm[Pos.End, String, Tree]
+        private type Anywhere = STerm[Any, String, Tree]
+
+        private val asMidSTerm: Tree =\> Mid = {
+            case asAnywhereTerm(t) => t
+            case ValDef(name, _, Some(expr)) => STerm.Assignment(Vector(), STerm.Application(expr, Vector()))
+        }
+
+        private val asEndTerm: Tree =\> End = =\>.empty
+
+        private val asAnywhereTerm: Tree =\> Anywhere = {
+            case Apply(t, Apply())
+        }
+    end SMCMacro
+
+    def syntax[H[_, _], U[_]](using SymmetricCat[H, U]): Syntax[H, U] = Syntax()
+end smc
