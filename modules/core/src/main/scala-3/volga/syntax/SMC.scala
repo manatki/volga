@@ -40,22 +40,12 @@ object smc:
         block: Expr[SyApp[H, U] ?=> R]
     )(using Quotes): Expr[H[U[tags.One], Reconstruct[U, R]]] = SMCMacro(syntax).just(block)
 
-    class SMCMacro[H[_, _], U[_]](syn: Expr[Syntax[H, U]])(using val q1: Quotes)(using Type[H], Type[U])
-        extends Aliases[H, U],
-          MParsing[q1.type](q1):
+    class SMCMacro[H[_, _], U[_]](syn: Expr[Syntax[H, U]])(using val q: Quotes)(using Type[H], Type[U])
+        extends Aliases[H, U]:
 
-        import q1.reflect.*
-        private val InlineTerm: Inlined =\> Term =
-            case Inlined(None, Nil, t) => t
-        private val CFBlock: Tree =\> Tree       =
-            case InlineTerm(
-                  Block(
-                    List(DefDef(nameD, _, _, Some(InlineTerm(Block(Nil, t))))),
-                    Closure(Ident(nameR), None)
-                  )
-                ) if nameD == nameR =>
-                t
-        end CFBlock
+        val p = MParsing(q)
+        import p.*
+        import q.reflect.*
 
         def just[R: Type](expr: Expr[SyApp[H, U] ?=> R]): Expr[H[I, Reconstruct[U, R]]] =
             val t  = expr.asTerm
