@@ -7,8 +7,9 @@ import volga.{Aliases, SymmetricCat}
 import scala.quoted.Quotes
 import scala.quoted.Expr
 import scala.quoted.Type
+import volga.syntax.internal.{STerm, Pos, MParsing}
+import scala.quoted.ToExpr.SetToExpr
 import scala.{PartialFunction as =\>}
-import volga.syntax.internal.{STerm, Pos}
 
 object smc:
     abstract final class Var[T]
@@ -39,9 +40,11 @@ object smc:
         block: Expr[SyApp[H, U] ?=> R]
     )(using Quotes): Expr[H[U[tags.One], Reconstruct[U, R]]] = SMCMacro(syntax).just(block)
 
-    class SMCMacro[H[_, _], U[_]](syn: Expr[Syntax[H, U]])(using q: Quotes)(using Type[H], Type[U])
-        extends Aliases[H, U]:
-        import q.reflect.*
+    class SMCMacro[H[_, _], U[_]](syn: Expr[Syntax[H, U]])(using val q1: Quotes)(using Type[H], Type[U])
+        extends Aliases[H, U],
+          MParsing[q1.type](q1):
+
+        import q1.reflect.*
         private val InlineTerm: Inlined =\> Term =
             case Inlined(None, Nil, t) => t
         private val CFBlock: Tree =\> Tree       =
@@ -58,10 +61,14 @@ object smc:
             val t  = expr.asTerm
             val tt = Expr(t.tpe.show)
             val s  = t match
-                case CFBlock(t) =>
+                case CFBlock(Block(mids, res)) =>
+                    val parsedMids = mids.collect(asMidSTerm)
+
                     s"""|success 
-                        |${t.show(using Printer.TreeStructure)}""".stripMargin
-                case _          =>
+                        |${t.show(using Printer.TreeStructure)}
+                        |$parsedMids""".stripMargin
+
+                case _ =>
                     s"""|failure
                         |${expr.asTerm}""".stripMargin
 
@@ -73,20 +80,6 @@ object smc:
             }
         end just
 
-        private type Mid      = STerm[Pos.Mid, String, Tree]
-        private type End      = STerm[Pos.End, String, Tree]
-        private type Anywhere = STerm[Any, String, Tree]
-
-        private val asMidSTerm: Tree =\> Mid = {
-            case asAnywhereTerm(t) => t
-            case ValDef(name, _, Some(expr)) => STerm.Assignment(Vector(), STerm.Application(expr, Vector()))
-        }
-
-        private val asEndTerm: Tree =\> End = =\>.empty
-
-        private val asAnywhereTerm: Tree =\> Anywhere = {
-            case Apply(t, Apply())
-        }
     end SMCMacro
 
     def syntax[H[_, _], U[_]](using SymmetricCat[H, U]): Syntax[H, U] = Syntax()

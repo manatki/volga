@@ -14,10 +14,11 @@ import Nat.{OfInt, Zero, Succ}
 import volga.free.Nat
 
 import volga.free.FreeProp
-type Label[A, B]            = String
-type TT[N <: Int, M <: Int] = FreeProp[Label, Nat.OfInt[N], Nat.OfInt[M]]
+type Label[A, B]             = String
+type Diag[A, B]              = FreeProp[Label, A, B]
+type DAG[N <: Int, M <: Int] = FreeProp[Label, Nat.OfInt[N], Nat.OfInt[M]]
 
-def node(name: String, x: Int, y: Int): TT[x.type, y.type] = FreeProp.Embed(name)
+def node(name: String, x: Int, y: Int): DAG[x.type, y.type] = FreeProp.Embed(name)
 
 val xxx = {
     val i = node("I", 0, 1)
@@ -45,8 +46,8 @@ val zzz = {
     val y2 = node("Y2", 2, 0)
 
     (x1 >< x2) >>>
-    (FreeProp.idInt[1] >< FreeProp.Swap >< FreeProp.idInt[1]) >>>
-    (y1 >< y2)
+        (FreeProp.idInt[1] >< FreeProp.Swap >< FreeProp.idInt[1]) >>>
+        (y1 >< y2)
 }
 
 def showGraph(l: FreeProp[Label, Zero, Zero]): Unit =
