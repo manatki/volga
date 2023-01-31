@@ -48,7 +48,7 @@ val publishSettings = List(
 val commonSettings = Vector(
   scalaVersion       := scala3version,
   crossScalaVersions := List(scala3version),
-  scalacOptions ++= Vector("-source", "future", "-Ykind-projector:underscores")
+  scalacOptions ++= Vector("-source", "future", "-Ykind-projector:underscores", "-Yshow-suppressed-errors")
 )
 
 lazy val core = project

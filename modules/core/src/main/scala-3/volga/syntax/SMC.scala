@@ -61,7 +61,7 @@ object smc:
     class SMCMacro[H[_, _], U[_]](syn: Expr[Syntax[H, U]])(using val q: Quotes)(using Type[H], Type[U])
         extends Aliases[H, U]:
 
-        val p = MParsing(q)
+        val p = MParsing()
         import p.*
         import q.reflect.*
 
@@ -70,21 +70,23 @@ object smc:
             val tt = Expr(t.tpe.show)
             val s  = t match
                 case CFBlock(Block(mids, res)) =>
+                    val parts   = (mids :+ res).map(_.show(using Printer.TreeStructure)).mkString("# ", "\n# ", "")
                     val parseds = (mids.map(asMidSTerm.lift) :+ asEndTerm.lift(res)).mkString("* ", "\n* ", "")
 
                     s"""|success 
                         |${t.show(using Printer.TreeStructure)}
+                        |------
+                        |$parts
+                        |------
                         |$parseds""".stripMargin
 
                 case _ =>
                     s"""|failure
                         |${expr.asTerm}""".stripMargin
 
-            val printed = Expr(s)
-            '{
-                println($printed)
-                $syn.dummy
-            }
+            // val printed = Expr(s)
+            report.errorAndAbort(s, expr)
+            '{ $syn.dummy }
         end just
 
     end SMCMacro
