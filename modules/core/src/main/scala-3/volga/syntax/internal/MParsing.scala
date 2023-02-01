@@ -11,10 +11,10 @@ final class MParsing[q <: Quotes & Singleton](using val q: q):
     import q.reflect.*
     import Pos.*
 
-    private type Mid      = STerm[Pos.Mid, String, Tree]
-    private type MidT     = STerm[Pos.Mid & Pos.Tupling, String, Tree]
-    private type End      = STerm[Pos.End, String, Tree]
-    private type Anywhere = STerm[Any, String, Tree]
+    private type Mid      = STerm[String, Tree] & Pos.Mid
+    private type MidT     = STerm[String, Tree] & (Pos.Mid | Pos.Tupling)
+    private type End      = STerm[String, Tree] & Pos.End
+    private type Anywhere = STerm[String, Tree] & Pos.Mid & Pos.End
     private type App      = STerm.Application[String, Tree]
 
     val InlineTerm: Inlined =\> Term =
@@ -35,10 +35,9 @@ final class MParsing[q <: Quotes & Singleton](using val q: q):
         case ValDef(name, _, Some(asApplication(app)))                                          =>
             STerm.Assignment(Vector(name), app)
         case ValDef(name, _, Some(Match(Typed(asApplication(app), t @ TupleRepr(i)), List(_)))) =>
-            report.info(s"${t.tpe.show}: ${t.tpe.classSymbol}")
-            STerm.Tupled(name, 0, app)
+            STerm.Tupled(name, i, app)
         case ValDef(name, _, Some(Select(Ident(tname), s"_${OfInt(i)}")))                       =>
-            STerm.Untupling(name, tname, i)
+            STerm.Untupling(tname, name, i - 1)
     end asMidSTerm
 
     val asEndTerm: Tree =\> End =
@@ -81,14 +80,53 @@ final class MParsing[q <: Quotes & Singleton](using val q: q):
     val midTermErr = VError.atTree(_: Tree)("error while parsing mid term")
     val endTermErr = VError.atTree(_: Tree)("error while parsing end term")
 
-    case class TuplingState(app: App, bindings: Vector[Option[String]])
+    private def fullVector[A] = ({ case Some(a) => a }: Option[A] =\> A).travector
+
+    case class TuplingState(app: Option[App] = None, bindings: Vector[Option[String]] = Vector.empty, arity: Int = 0):
+        def addBinding(index: Int, binding: String) =
+            val newBindings =
+                if bindings.size > index then bindings.updated(index, Some(binding))
+                else bindings ++ Vector.fill(index - bindings.size)(None) :+ Some(binding)
+            copy(bindings = newBindings)
+
+        def define(app: App, arity: Int) = copy(app = Some(app), arity = arity)
+
+    val CompleteTuplingState: TuplingState =\> Mid =
+        case TuplingState(Some(app), fullVector(xs), arity) if arity > 0 && xs.size == arity =>
+            STerm.Assignment(xs, app)
+
     case class DetupleState(
         tuplings: Map[String, TuplingState] = Map.empty,
         result: Vector[Mid] = Vector.empty
     ):
-        def push(cmd: MidT): DetupleState = this
+        private def add(mid: Mid) = copy(result = result :+ mid)
 
-    def detuple(commands: Iterable[MidT], acc: Vector[Mid] = Vector.empty): Vector[Mid] =
-        commands.foldLeft(DetupleState())(_.push(_)).result
+        private def updateTupling(name: String)(f: TuplingState => TuplingState) =
+            val tupling = f(tuplings.getOrElse(name, TuplingState()))
+            tupling match
+                case CompleteTuplingState(mid) => add(mid).copy(tuplings = tuplings - name)
+                case _                         => copy(tuplings = tuplings.updated(name, tupling))
+
+        def push(cmd: STerm[String, Tree] & (Pos.Mid | Pos.Tupling)): DetupleState = cmd match
+            case STerm.Tupled(receiver, arity, application) => updateTupling(receiver)(_.define(application, arity))
+            case STerm.Untupling(src, tgt, index)           => updateTupling(src)(_.addBinding(index, tgt))
+            case term: Pos.Mid                              => add(term)
+
+        def end: Either[VError, Vector[Mid]] =
+            if tuplings.isEmpty then Right(result)
+            else
+                q.reflect.report.info(tuplings.toString())
+                Left(() =>
+                    tuplings.values.foreach {
+                        case TuplingState(Some(STerm.Application(tree, _)), _, _) =>
+                            q.reflect.report.error("incorrect tupling", tree.pos)
+                        case _                                                    =>
+                    }
+                )
+
+    end DetupleState
+
+    def detuple(commands: Iterable[MidT], acc: Vector[Mid] = Vector.empty)(using Quotes): Either[VError, Vector[Mid]] =
+        commands.foldLeft(DetupleState())(_.push(_)).end
 
 end MParsing

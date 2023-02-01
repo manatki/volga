@@ -75,9 +75,10 @@ object smc:
                     val parts   = (mids :+ res).map(_.show(using Printer.TreeStructure)).mkString("# ", "\n# ", "")
                     val parseds =
                         (for
-                            midTerms <- VError.traverse(mids, asMidSTerm)(midTermErr)
-                            endTerm  <- VError.applyOr(res)(asEndTerm)(endTermErr(res))
-                        yield (midTerms :+ endTerm).mkString("* ", "\n* ", "")).left.map(_.report()).getOrElse("")
+                            midTerms     <- VError.traverse(mids, asMidSTerm)(midTermErr)
+                            detupledMids <- detuple(midTerms)
+                            endTerm      <- VError.applyOr(res)(asEndTerm)(endTermErr(res))
+                        yield (detupledMids :+ endTerm).mkString("* ", "\n* ", "")).left.map(_.report()).getOrElse("")
 
                     s"""|success 
                         |${t.show(using Printer.TreeStructure)}
@@ -90,8 +91,7 @@ object smc:
                     s"""|failure
                         |${expr.asTerm}""".stripMargin
 
-            // val printed = Expr(s)
-            report.warning(s, expr)
+            report.error(s, expr)
             '{ $syn.dummy }
         end just
 
