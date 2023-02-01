@@ -91,7 +91,7 @@ object smc:
                     s"""|failure
                         |${expr.asTerm}""".stripMargin
 
-            report.error(s, expr)
+            report.warning(s, expr)
             '{ $syn.dummy }
         end just
 
