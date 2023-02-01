@@ -4,22 +4,98 @@ package syntax
 import volga.SymmetricCat
 
 import volga.{Aliases, SymmetricCat}
-object smc {
-  abstract final class Var[T]
+import scala.quoted.Quotes
+import scala.quoted.Expr
+import scala.quoted.Type
+import volga.syntax.internal.{STerm, Pos, MParsing}
+import scala.quoted.ToExpr.SetToExpr
+import scala.{PartialFunction as =\>}
+import com.azul.crs.client.Result
+import scala.collection.View.Empty
+import free.Nat
+import volga.syntax.internal.VError
+import scala.util.chaining.given
 
-  final class Syntax[H[_, _], U[_]](using c: SymmetricCat[H, U]) extends Aliases[H, U]:
-    final abstract class SyApp:
-      extension [A, B](f: H[A, B]) def apply(v: Var[A]): Var[B]
+object smc:
+    abstract final class Var[T]
 
-    type Reconstruct[X] = X match
-      case Var[a]     => a
-      case EmptyTuple => I
-      case h *: t     => Reconstruct[h] x Reconstruct[t]
+    type Reconstruct[U[_], X] = X match
+        case Var[a]     => a
+        case EmptyTuple => U[tags.One]
+        case h *: t     => U[tags.Tensor[Reconstruct[U, h], Reconstruct[U, t]]]
+        case Unit       => U[tags.One]
+        case EmptyTuple => U[tags.One]
 
-    inline def apply[R](inline f: () => SyApp ?=> R): H[R, Reconstruct[R]] = null.asInstanceOf[Nothing]
-    inline def apply[A, B](inline f: Var[A] => SyApp ?=> B): H[A, Reconstruct[B]] = null.asInstanceOf[Nothing]
+    type TResults[U[_], X] <: Tuple = X match
+        case Nat.Zero             => EmptyTuple
+        case Nat.Succ[n]          => Var[Nat.`1`] *: TResults[U, n]
+        case U[tags.Tensor[u, v]] => Results[U, u] *: TResults[U, v]
+        case U[tags.One]          => EmptyTuple
+        case _                    => Var[X] *: EmptyTuple
 
-  end Syntax
+    type Results[U[_], X] = X match
+        case Nat.Zero             => Unit
+        case Nat.Succ[n]          => Var[Nat.`1`] *: TResults[U, n]
+        case U[tags.Tensor[u, v]] => Results[U, u] *: TResults[U, v]
+        case U[tags.One]          => Unit
+        case _                    => Var[X]
 
-  inline def syntax[H[_, _], U[_]](using SymmetricCat[H, U]): Syntax[H, U] = new Syntax
-}
+    final abstract class SyApp[H[_, _], U[_]] extends Aliases[H, U]:
+        extension [A, B](f: H[A, B]) def apply(v: Var[A]): Results[U, B]
+        extension [B](f: H[I, B]) def apply(): Var[B]
+
+    final class Syntax[H[_, _], U[_]] extends Aliases[H, U]:
+
+        def dummy[A, B]: H[A, B] = null.asInstanceOf[H[A, B]]
+
+        inline def just[R](inline block: SyApp[H, U] ?=> R): H[I, Reconstruct[U, R]] =
+            ${ justMacro[H, U, R]('this)('block) }
+
+        inline def apply[A, B](f: Var[A] => SyApp[H, U] ?=> B): H[A, Reconstruct[U, B]] =
+            null.asInstanceOf[Nothing]
+
+    end Syntax
+
+    private def justMacro[H[_, _]: Type, U[_]: Type, R: Type](syntax: Expr[Syntax[H, U]])(
+        block: Expr[SyApp[H, U] ?=> R]
+    )(using Quotes): Expr[H[U[tags.One], Reconstruct[U, R]]] = SMCMacro(syntax).just(block)
+
+    class SMCMacro[H[_, _], U[_]](syn: Expr[Syntax[H, U]])(using val q: Quotes)(using Type[H], Type[U])
+        extends Aliases[H, U]:
+
+        val p = MParsing()
+        import p.*
+        import q.reflect.*
+
+        def just[R: Type](expr: Expr[SyApp[H, U] ?=> R]): Expr[H[I, Reconstruct[U, R]]] =
+            val t  = expr.asTerm
+            val tt = Expr(t.tpe.show)
+            val s  = t match
+                case CFBlock(Block(mids, res)) =>
+                    val parts   = (mids :+ res).map(_.show(using Printer.TreeStructure)).mkString("# ", "\n# ", "")
+                    val parseds =
+                        (for
+                            midTerms     <- VError.traverse(mids, asMidSTerm)(midTermErr)
+                            detupledMids <- detuple(midTerms)
+                            endTerm      <- VError.applyOr(res)(asEndTerm)(endTermErr(res))
+                        yield (detupledMids :+ endTerm).mkString("* ", "\n* ", "")).left.map(_.report()).getOrElse("")
+
+                    s"""|success 
+                        |${t.show(using Printer.TreeStructure)}
+                        |------
+                        |$parts
+                        |------
+                        |$parseds""".stripMargin
+
+                case _ =>
+                    s"""|failure
+                        |${expr.asTerm}""".stripMargin
+
+            report.warning(s, expr)
+            '{ $syn.dummy }
+        end just
+
+    end SMCMacro
+
+    def syntax[H[_, _], U[_]](using SymmetricCat[H, U]): Syntax[H, U] = Syntax()
+end smc
