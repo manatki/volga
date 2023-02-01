@@ -12,12 +12,12 @@ class SyntaxTest extends munit.FunSuite:
     test("a -> b") {
         val aNode        = node("a", 0, 1)
         val bNode        = node("b", 1, 0)
-        val cNode        = node("c", 1, 2)
-        val x: DAG[0, 1] = prop.just {
+        val cNode        = node("c", 1, 3)
+        val x: DAG[0, 2] = prop.just {
             val x      = aNode()
-            val (u, v) = cNode(x)
+            val (u, v, w) = cNode(x)
             bNode(u)
-            v
+            (v, w)
         }
     }
 end SyntaxTest

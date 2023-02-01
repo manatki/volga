@@ -4,6 +4,7 @@ import scala.{PartialFunction as =\>}
 import scala.quoted.{Quotes, Type}
 import scala.annotation.threadUnsafe
 import scala.annotation.tailrec
+import volga.free.Nat.Vec
 
 final class MParsing[q <: Quotes & Singleton](using val q: q):
     import q.reflect.*
@@ -39,7 +40,9 @@ final class MParsing[q <: Quotes & Singleton](using val q: q):
             STerm.Untupling(name, tname, i)
     end asMidSTerm
 
-    val asEndTerm: Tree =\> End = =\>.empty
+    val asEndTerm: Tree =\> End =
+        case Typed(Ident(name), _)                    => STerm.Result(Vector(name))
+        case Apply(TupleApp(()), ident.travector(names)) => STerm.Result(names)
 
     val asApplication: Tree =\> App =
         case Apply(Apply(_, List(t)), ident.travector(names)) =>
@@ -47,6 +50,9 @@ final class MParsing[q <: Quotes & Singleton](using val q: q):
 
     val ident: Term =\> String =
         case Ident(name) => name
+
+    val TupleApp: Term =\> Unit =
+        case TypeApply(Select(Ident(s"Tuple$_"), "apply"), _) =>
 
     object TupleRepr:
         @threadUnsafe lazy val ConsS = TypeRepr.of[? *: ?].classSymbol

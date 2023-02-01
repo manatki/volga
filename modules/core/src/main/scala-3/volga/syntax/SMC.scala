@@ -85,7 +85,7 @@ object smc:
                         |${expr.asTerm}""".stripMargin
 
             // val printed = Expr(s)
-            report.errorAndAbort(s, expr)
+            report.error(s, expr)
             '{ $syn.dummy }
         end just
 

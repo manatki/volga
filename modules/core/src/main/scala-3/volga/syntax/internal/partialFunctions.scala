@@ -6,3 +6,4 @@ extension [A, B](pf: PartialFunction[A, B])
 
 object OfInt:
     def unapply(s: String): Option[Int] = s.toIntOption
+    
