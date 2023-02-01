@@ -13,6 +13,8 @@ import scala.{PartialFunction as =\>}
 import com.azul.crs.client.Result
 import scala.collection.View.Empty
 import free.Nat
+import volga.syntax.internal.VError
+import scala.util.chaining.given
 
 object smc:
     abstract final class Var[T]
@@ -71,7 +73,11 @@ object smc:
             val s  = t match
                 case CFBlock(Block(mids, res)) =>
                     val parts   = (mids :+ res).map(_.show(using Printer.TreeStructure)).mkString("# ", "\n# ", "")
-                    val parseds = (mids.map(asMidSTerm.lift) :+ asEndTerm.lift(res)).mkString("* ", "\n* ", "")
+                    val parseds =
+                        (for
+                            midTerms <- VError.traverse(mids, asMidSTerm)(midTermErr)
+                            endTerm  <- VError.applyOr(res)(asEndTerm)(endTermErr(res))
+                        yield (midTerms :+ endTerm).mkString("* ", "\n* ", "")).left.map(_.report()).getOrElse("")
 
                     s"""|success 
                         |${t.show(using Printer.TreeStructure)}
@@ -85,7 +91,7 @@ object smc:
                         |${expr.asTerm}""".stripMargin
 
             // val printed = Expr(s)
-            report.error(s, expr)
+            report.warning(s, expr)
             '{ $syn.dummy }
         end just
 

@@ -88,7 +88,8 @@ val oldSettings = Vector(
         "-language:higherKinds",
         "-language:postfixOps",
         "-deprecation",
-        "-Ymacro-annotations"
+        "-Ymacro-annotations",
+        "-Yexplicit-nulls",
       ),
   publish / skip     := true
 )

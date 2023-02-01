@@ -6,6 +6,7 @@ import scala.annotation.threadUnsafe
 import scala.annotation.tailrec
 import volga.free.Nat.Vec
 
+import volga.syntax.internal.VError
 final class MParsing[q <: Quotes & Singleton](using val q: q):
     import q.reflect.*
     import Pos.*
@@ -41,7 +42,7 @@ final class MParsing[q <: Quotes & Singleton](using val q: q):
     end asMidSTerm
 
     val asEndTerm: Tree =\> End =
-        case Typed(Ident(name), _)                    => STerm.Result(Vector(name))
+        case Typed(Ident(name), _)                       => STerm.Result(Vector(name))
         case Apply(TupleApp(()), ident.travector(names)) => STerm.Result(names)
 
     val asApplication: Tree =\> App =
@@ -54,6 +55,7 @@ final class MParsing[q <: Quotes & Singleton](using val q: q):
     val TupleApp: Term =\> Unit =
         case TypeApply(Select(Ident(s"Tuple$_"), "apply"), _) =>
 
+    val asAnywhereTerm: Tree =\> Anywhere = asApplication
     object TupleRepr:
         @threadUnsafe lazy val ConsS = TypeRepr.of[? *: ?].classSymbol
         @threadUnsafe lazy val NilS  = TypeRepr.of[EmptyTuple].classSymbol
@@ -76,6 +78,17 @@ final class MParsing[q <: Quotes & Singleton](using val q: q):
                 case _    => None
     end TupleRepr
 
-    val asAnywhereTerm: Tree =\> Anywhere = asApplication
+    val midTermErr = VError.atTree(_: Tree)("error while parsing mid term")
+    val endTermErr = VError.atTree(_: Tree)("error while parsing end term")
+
+    case class TuplingState(app: App, bindings: Vector[Option[String]])
+    case class DetupleState(
+        tuplings: Map[String, TuplingState] = Map.empty,
+        result: Vector[Mid] = Vector.empty
+    ):
+        def push(cmd: MidT): DetupleState = this
+
+    def detuple(commands: Iterable[MidT], acc: Vector[Mid] = Vector.empty): Vector[Mid] =
+        commands.foldLeft(DetupleState())(_.push(_)).result
 
 end MParsing

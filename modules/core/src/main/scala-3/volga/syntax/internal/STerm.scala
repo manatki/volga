@@ -12,7 +12,3 @@ enum STerm[-Pos, +S, +T]:
     case Result[+S](results: Vector[S])                                           extends STerm[Pos.End, S, Nothing]
     case Application[+S, +T](applied: T, args: Vector[S])                         extends STerm[Any, S, T]
     case Dummy(tree: T)
-
-object STerm:
-
-end STerm
