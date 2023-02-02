@@ -48,7 +48,13 @@ val publishSettings = List(
 val commonSettings = Vector(
   scalaVersion       := scala3version,
   crossScalaVersions := List(scala3version),
-  scalacOptions ++= Vector("-source", "future", "-Ykind-projector:underscores", "-Yshow-suppressed-errors")
+  scalacOptions ++= Vector(
+    // "-source",
+    // "future",
+    "-Ykind-projector:underscores",
+    "-Yshow-suppressed-errors",
+    "-Yexplicit-nulls"
+  )
 )
 
 lazy val core = project
@@ -88,8 +94,7 @@ val oldSettings = Vector(
         "-language:higherKinds",
         "-language:postfixOps",
         "-deprecation",
-        "-Ymacro-annotations",
-        "-Yexplicit-nulls",
+        "-Ymacro-annotations"
       ),
   publish / skip     := true
 )

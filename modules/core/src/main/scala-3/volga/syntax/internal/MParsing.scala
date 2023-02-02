@@ -102,10 +102,9 @@ final class MParsing[q <: Quotes & Singleton](using val q: q):
         private def add(mid: Mid) = copy(result = result :+ mid)
 
         private def updateTupling(name: String)(f: TuplingState => TuplingState) =
-            val tupling = f(tuplings.getOrElse(name, TuplingState()))
-            tupling match
+            f(tuplings.getOrElse(name, TuplingState())) match
                 case CompleteTuplingState(mid) => add(mid).copy(tuplings = tuplings - name)
-                case _                         => copy(tuplings = tuplings.updated(name, tupling))
+                case tupling                   => copy(tuplings = tuplings.updated(name, tupling))
 
         def push(cmd: STerm[String, Tree] & (Pos.Mid | Pos.Tupling)): DetupleState = cmd match
             case STerm.Tupled(receiver, arity, application) => updateTupling(receiver)(_.define(application, arity))
@@ -115,7 +114,6 @@ final class MParsing[q <: Quotes & Singleton](using val q: q):
         def end: Either[VError, Vector[Mid]] =
             if tuplings.isEmpty then Right(result)
             else
-                q.reflect.report.info(tuplings.toString())
                 Left(() =>
                     tuplings.values.foreach {
                         case TuplingState(Some(STerm.Application(tree, _)), _, _) =>

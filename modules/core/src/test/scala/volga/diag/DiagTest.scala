@@ -12,6 +12,7 @@ import volga.free.Nat
 import Nat.{OfInt, Zero, Succ}
 
 import volga.free.Nat
+import scala.language.unsafeNulls
 
 import volga.free.FreeProp
 type Label[A, B]             = String

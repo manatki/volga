@@ -10,7 +10,6 @@ import scala.quoted.Type
 import volga.syntax.internal.{STerm, Pos, MParsing}
 import scala.quoted.ToExpr.SetToExpr
 import scala.{PartialFunction as =\>}
-import com.azul.crs.client.Result
 import scala.collection.View.Empty
 import free.Nat
 import volga.syntax.internal.VError
