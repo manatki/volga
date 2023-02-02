@@ -7,12 +7,12 @@ import volga.{Aliases, SymmetricCat}
 import scala.quoted.Quotes
 import scala.quoted.Expr
 import scala.quoted.Type
-import volga.syntax.internal.{STerm, Pos, MParsing}
+import volga.syntax.parsing.{STerm, Pos, MParsing}
 import scala.quoted.ToExpr.SetToExpr
 import scala.{PartialFunction as =\>}
 import scala.collection.View.Empty
 import free.Nat
-import volga.syntax.internal.VError
+import volga.syntax.parsing.VError
 import scala.util.chaining.given
 
 object smc:
