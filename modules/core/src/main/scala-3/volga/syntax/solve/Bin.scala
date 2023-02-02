@@ -3,6 +3,7 @@ package volga.syntax.solve
 import volga.syntax.solve.Bin._
 import volga.syntax.solve.BinHistory.{HChain, HConsume, HGrow, HRotate, HSplit, HSwap}
 import volga.syntax.solve.BinOp._
+import volga.syntax.solve.binop._
 
 import scala.annotation.tailrec
 import scala.collection.Factory
@@ -129,24 +130,50 @@ object Bin {
     // }
 }
 
-sealed trait BinOp {
-    def tryExchange: PartialFunction[BinOp, BinOp.Exchange]
+package binop:
+    sealed trait Index
+    case class At(i: Int) extends Index
+
+    sealed trait Side(val other: Side) extends Index
+    case object L                      extends Side(other = R)
+    case object R                      extends Side(other = L)
+
+enum BinOp:
+    case Consume(side: Side)
+    case Grow(side: Side)
+    case Rotate(side: Side)
+    case Swap
+    case Split(left: Vector[BinOp], right: Vector[BinOp])
+
+    final def tryExchange: PartialFunction[BinOp, BinOp.Exchange] = this match
+        case Consume(side)      => { case Grow(`side`) => Stop() }
+        case Grow(side)         => { case Consume(`side`) => Stop() }
+        case Rotate(side)       => { case Rotate(s1) if s1 != side => Stop() }
+        case Swap               => { case Swap => Stop() }
+        case Split(left, right) => {
+            case Swap          => Continue(Split(right, left), Swap)
+            case Split(lo, ro) => Continue(Split(left mergeAll lo, right mergeAll ro))
+        }
 
     def exchange(other: BinOp): BinOp.Exchange =
         tryExchange.applyOrElse(other, (_: BinOp) => Stop(this, other))
 
-    def invert: BinOp = this match {
+    def invert: BinOp = this match
         case Rotate(side)  => Rotate(side.other)
         case Swap          => Swap
         case Split(l, r)   => Split(l.invertAll, r.invertAll)
         case Grow(side)    => Consume(side)
         case Consume(side) => Grow(side)
-    }
 
-    def isEmpty = false
-}
+    final def isEmpty: Boolean = this match
+        case Split(left, right)                  => left.forall(_.isEmpty) && right.forall(_.isEmpty)
+        case Swap | _: (Consume | Grow | Rotate) => false
+end BinOp
 
-object BinOp {
+object BinOp:
+    import binop.*
+
+    final case class Exchange(continue: Boolean, res: Vector[BinOp])
     extension (binops: Vector[BinOp])
         def invertAll: Vector[BinOp]                       = binops.reverseIterator.map(_.invert).toVector
         def mergeAll(next: Iterable[BinOp]): Vector[BinOp] = next.foldLeft(binops)(_ merge _)
@@ -162,51 +189,10 @@ object BinOp {
                     case head +: tail if cont => init.mergeOneLoop(head, tail ++ rest)
                     case _                    => init ++ res ++ rest
             case empty        => op +: rest
-
     end extension
-
-    final case class Consume(side: Side) extends BinOp {
-        def tryExchange = { case Grow(`side`) => Stop() }
-    }
-
-    final case class Grow(side: Side) extends BinOp {
-        def tryExchange = { case Consume(`side`) => Stop() }
-    }
-
-    final case class Rotate(side: Side) extends BinOp {
-        def tryExchange = { case Rotate(s1) if s1 != side => Stop() }
-    }
-
-    case object Swap extends BinOp {
-        def tryExchange = { case Swap => Stop() }
-    }
-
-    final case class Split(left: Vector[BinOp], right: Vector[BinOp]) extends BinOp {
-        override val isEmpty = left.forall(_.isEmpty) && right.forall(_.isEmpty)
-
-        def tryExchange = {
-            case Swap          => Continue(Split(right, left), Swap)
-            case Split(lo, ro) => Continue(Split(left mergeAll lo, right mergeAll ro))
-        }
-    }
-
-    final case class Exchange(continue: Boolean, res: Vector[BinOp])
 
     def Stop(binOp: BinOp*)     = Exchange(false, binOp.toVector)
     def Continue(binOp: BinOp*) = Exchange(true, binOp.toVector)
-
-    sealed trait Index
-    case class At(i: Int) extends Index
-
-    sealed trait Side extends Index {
-        def other: Side
-    }
-    case object L     extends Side  {
-        def other = R
-    }
-    case object R     extends Side  {
-        def other = L
-    }
 
     final case class Error(op: BinOp, tree: Bin[Any], path: List[Index] = Nil) {
         def ::(i: Index): Error     = copy(path = i :: path)
@@ -214,23 +200,22 @@ object BinOp {
     }
 
     // final implicit val showError: Show[Error] = err => s"error ${err.op} : ${err.path.mkString("-")}"
-}
+end BinOp
 
 final case class BinZipper[+A](
     bin: Bin[A],
     history: Vector[BinOp] = Vector(),
     parent: Option[(Side, BinZipper[A])] = None
-) {
+):
     def walk[A1 >: A](fs: (BinZipper[A1] => Option[BinZipper[A1]])*): Option[BinZipper[A1]] =
         fs.foldLeft[Option[BinZipper[A1]]](Some(this))((bz, f) => bz.flatMap(f))
 
-    def goUp =
-        parent.collect {
-            case (L, BinZipper(Branch(_, r), ph, pp)) =>
-                BinZipper(Branch(bin, r), ph put Split(history, Vector()), pp)
-            case (R, BinZipper(Branch(l, _), ph, pp)) =>
-                BinZipper(Branch(l, bin), ph put Split(Vector(), history), pp)
-        }
+    def goUp = parent.collect {
+        case (L, BinZipper(Branch(_, r), ph, pp)) =>
+            BinZipper(Branch(bin, r), ph put Split(history, Vector()), pp)
+        case (R, BinZipper(Branch(l, _), ph, pp)) =>
+            BinZipper(Branch(l, bin), ph put Split(Vector(), history), pp)
+    }
 
     def go(side: Side) =
         bin match
@@ -280,34 +265,30 @@ final case class BinZipper[+A](
             .attempt(consume(L))
             .attempt(consume(R))
 
-    def linearize: BinZipper[A] =
-        rotate(R) match {
+    @tailrec def linearize: BinZipper[A] =
+        rotate(R) match
             case Some(t) => t.linearize
             case None    =>
-                goRight match {
+                goRight match
                     case Some(b) => b.linearize
                     case None    => this
-                }
-        }
 
     def normalize: BinZipper[A] = clean.linearize.top
 
-    def top: BinZipper[A] = goUp match {
+    @tailrec def top: BinZipper[A] = goUp match
         case Some(p) => p.top
         case None    => this
-    }
 
     def tree: Bin[A] = top.bin
 
     def appMany(ops: Vector[BinOp]): Option[BinZipper[A]] = ops.foldOpt(this)(_ app _)
 
-    def app(op: BinOp): Option[BinZipper[A]] = op match {
+    def app(op: BinOp): Option[BinZipper[A]] = op match
         case Rotate(side)  => rotate(side)
         case Swap          => swap
         case Split(ls, rs) => walk(_.goLeft, _.appMany(ls), _.goUp, _.goRight, _.appMany(rs), _.goUp)
         case Consume(side) => consume(side)
         case Grow(side)    => grow(side)
-    }
 
     @tailrec def repeat[A1 >: A](count: Int)(act: BinZipper[A1] => Option[BinZipper[A1]]): Option[BinZipper[A1]] =
         if count == 0 then Some(this)
@@ -316,10 +297,9 @@ final case class BinZipper[+A](
                 case Some(z) => z.repeat(count - 1)(act)
                 case None    => None
 
-    def swapNext = rotate(L) match {
+    def swapNext = rotate(L) match
         case Some(z) => z.walk(_.goLeft, _.swap, _.goUp, _.rotate(R))
         case None    => swap
-    }
 
     def swapElems(i: Int, j: Int) =
         if (i >= j) Some(this)
@@ -331,29 +311,29 @@ final case class BinZipper[+A](
               _.repeat(j - i - 1)(_.walk(_.goUp, _.swapNext)),
               _.repeat(i)(_.goUp)
             )
-}
+end BinZipper
 
-sealed trait BinHistory[+A]:
-    def map[B](f: A => B): BinHistory[B] = this match
+enum BinHistory[+A]:
+    case HRotate(side: Side, l: A, m: A, r: A)
+    case HSwap(l: A, r: A)
+    case HSplit(left: HChain[A], right: HChain[A])
+    case HConsume(side: Side, v: A)
+    case HGrow(side: Side, v: A)
+
+    final def map[B](f: A => B): BinHistory[B] = this match
         case HRotate(side, l, m, r) => HRotate(side, f(l), f(m), f(r))
         case HSwap(l, r)            => HSwap(f(l), f(r))
         case HSplit(ls, rs)         => HSplit(ls.map(f), rs.map(f))
         case HConsume(side, v)      => HConsume(side, f(v))
         case HGrow(side, v)         => HGrow(side, f(v))
+end BinHistory
 
-object BinHistory {
+object BinHistory:
+
     final case class HChain[+A](start: A, end: A, history: Vector[BinHistory[A]]) {
         def map[B](f: A => B): HChain[B] = HChain(f(start), f(end), history.map(_.map(f)))
     }
-    final case class HRotate[+A](side: Side, l: A, m: A, r: A) extends BinHistory[A]
-    final case class HSwap[+A](l: A, r: A)          extends BinHistory[A]
-    final case class HSplit[+A](
-        left: HChain[A],
-        right: HChain[A]
-    ) extends BinHistory[A]
-    final case class HConsume[+A](side: Side, v: A) extends BinHistory[A]
-    final case class HGrow[+A](side: Side, v: A)    extends BinHistory[A]
-}
+end BinHistory
 
 final type History[+A] = Vector[BinHistory[A]]
 trait EmptyHistory:

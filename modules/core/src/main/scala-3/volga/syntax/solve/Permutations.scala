@@ -5,11 +5,11 @@ import scala.collection.immutable.BitSet
 import scala.collection.mutable
 import volga.free.Nat.Vec
 
-object Permutations {
-    def cycles(xs: Vector[Int]): Vector[Vector[Int]] = {
+object Permutations:
+    def cycles(xs: Vector[Int]): Vector[Vector[Int]] =
         val seen = mutable.BitSet()
         val bldr = Vector.newBuilder[Vector[Int]]
-        for (start <- xs.indices if !seen(start)) {
+        for start <- xs.indices if !seen(start) do
             val subldr                    = Vector.newBuilder[Int]
             var i                         = start
             @tailrec def go(i: Int): Unit =
@@ -20,19 +20,17 @@ object Permutations {
 
             go(start)
             bldr += subldr.result()
-        }
         end for
         bldr.result()
-    }
+    end cycles
 
-    def cycleSwaps(xs: Vector[Int]): Vector[(Int, Int)] = xs match {
+    def cycleSwaps(xs: Vector[Int]): Vector[(Int, Int)] = xs match
         case head +: rest => rest map head.->
         case _            => Vector()
-    }
 
     def swaps(xs: Vector[Int]): Vector[(Int, Int)] = cycles(xs).flatMap(cycleSwaps)
 
-    def buildPerm[A](xs: Vector[A], ys: Vector[A]): Either[Vector[String], Vector[Int]] = {
+    def buildPerm[A](xs: Vector[A], ys: Vector[A]): Either[Vector[String], Vector[Int]] =
         val xset = xs.toSet
         val yset = ys.toSet
 
@@ -43,5 +41,6 @@ object Permutations {
           (xset != yset, () => s"xs and ys contain different elements : ${xset -- yset} vs ${yset -- xset}")
         ).collect { case (true, f) => f() }
         if errors.isEmpty then Right(xs.map(ys.iterator.zipWithIndex.toMap)) else Left(errors)
-    }
-}
+    end buildPerm
+
+end Permutations

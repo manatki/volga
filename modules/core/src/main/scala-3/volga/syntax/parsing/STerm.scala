@@ -1,4 +1,6 @@
-package volga.syntax.parsing:
+package volga.syntax.parsing
+
+package Pos:
     trait Mid
     trait End
     trait Tupling
