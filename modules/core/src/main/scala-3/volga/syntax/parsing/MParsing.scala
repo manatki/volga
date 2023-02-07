@@ -10,6 +10,7 @@ import volga.syntax.parsing.VError
 
 import volga.syntax.parsing.Pos.{Mid, End, Tupling}
 import volga.syntax.parsing.STerm
+import volga.syntax.parsing.App
 
 final class MParsing[q <: Quotes & Singleton](using val q: q):
     import q.reflect.*
@@ -19,7 +20,7 @@ final class MParsing[q <: Quotes & Singleton](using val q: q):
     private type MidT     = STerm[String, Tree] & (Pos.Mid | Pos.Tupling)
     private type End      = STerm[String, Tree] & Pos.End
     private type Anywhere = STerm[String, Tree] & Pos.Mid & Pos.End
-    private type App      = STerm.Application[String, Tree]
+    private type Appl     = App[String, Tree]
 
     val InlineTerm: Inlined =\> Term =
         case Inlined(None, Nil, t) => t
@@ -48,9 +49,9 @@ final class MParsing[q <: Quotes & Singleton](using val q: q):
         case Typed(Ident(name), _)                       => STerm.Result(Vector(name))
         case Apply(TupleApp(()), ident.travector(names)) => STerm.Result(names)
 
-    val asApplication: Tree =\> App =
+    val asApplication: Tree =\> Appl =
         case Apply(Apply(_, List(t)), ident.travector(names)) =>
-            STerm.Application(t, names)
+            App(t, names)
 
     val ident: Term =\> String =
         case Ident(name) => name
@@ -58,7 +59,8 @@ final class MParsing[q <: Quotes & Singleton](using val q: q):
     val TupleApp: Term =\> Unit =
         case TypeApply(Select(Ident(s"Tuple$_"), "apply"), _) =>
 
-    val asAnywhereTerm: Tree =\> Anywhere = asApplication
+    val asAnywhereTerm: Tree =\> Anywhere =
+        case asApplication(app) => STerm.Application(app)
     object TupleRepr:
         @threadUnsafe lazy val ConsS = TypeRepr.of[? *: ?].classSymbol
         @threadUnsafe lazy val NilS  = TypeRepr.of[EmptyTuple].classSymbol
@@ -86,14 +88,14 @@ final class MParsing[q <: Quotes & Singleton](using val q: q):
 
     private def fullVector[A] = ({ case Some(a) => a }: Option[A] =\> A).travector
 
-    case class TuplingState(app: Option[App] = None, bindings: Vector[Option[String]] = Vector.empty, arity: Int = 0):
+    case class TuplingState(app: Option[Appl] = None, bindings: Vector[Option[String]] = Vector.empty, arity: Int = 0):
         def addBinding(index: Int, binding: String) =
             val newBindings =
                 if bindings.size > index then bindings.updated(index, Some(binding))
                 else bindings ++ Vector.fill(index - bindings.size)(None) :+ Some(binding)
             copy(bindings = newBindings)
 
-        def define(app: App, arity: Int) = copy(app = Some(app), arity = arity)
+        def define(app: Appl, arity: Int) = copy(app = Some(app), arity = arity)
 
     val CompleteTuplingState: TuplingState =\> Mid =
         case TuplingState(Some(app), fullVector(xs), arity) if arity > 0 && xs.size == arity =>
@@ -120,9 +122,9 @@ final class MParsing[q <: Quotes & Singleton](using val q: q):
             else
                 Left(() =>
                     tuplings.values.foreach {
-                        case TuplingState(Some(STerm.Application(tree, _)), _, _) =>
+                        case TuplingState(Some(App(tree, _)), _, _) =>
                             q.reflect.report.error("incorrect tupling", tree.pos)
-                        case _                                                    =>
+                        case _                                      =>
                     }
                 )
 

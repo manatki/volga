@@ -5,11 +5,20 @@ import deriving.Mirror.{ProductOf, SumOf}
 import scala.reflect.TypeTest
 
 trait Traverse[F[_]] extends Functor[F]:
+    self =>
     extension [A](fa: F[A])
         def traverse[M[_], B](f: A => M[B])(using Monoidal[M]): M[F[B]]
         override def map[B](f: A => B): F[B] = traverse[[x] =>> x, B](f)
 
     extension [A, M[_]](fa: F[M[A]]) def sequence(using Monoidal[M]): M[F[A]] = fa.traverse(x => x)
+
+    def composeTraverse[G[_]: Traverse]: Traverse[[x] =>> F[G[x]]] =
+        new:
+            def covariant[A, B](using A <:< B): F[G[A]] <:< F[G[B]]                = self.composeCovariant
+            extension [A](fga: F[G[A]])
+                def traverse[M[_], B](f: A => M[B])(using Monoidal[M]): M[F[G[B]]] =
+                    self.traverse(fga)(_.traverse(f))
+end Traverse
 
 object Traverse:
     trait Cov[F[+_]] extends Functor.Cov[F], Traverse[F]

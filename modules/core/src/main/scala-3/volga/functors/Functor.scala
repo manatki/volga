@@ -3,6 +3,7 @@ package volga.functors
 import compiletime.*
 import deriving.Mirror.{ProductOf, SumOf}
 import scala.reflect.TypeTest
+import instances.TraverseMonoidal
 
 private def subtypeToIntersectionEq[A, B](using ev: A <:< B): A =:= (A & B) =
     given (A <:< (A & B)) = ev.liftCo[[x] =>> A & x]
@@ -15,10 +16,21 @@ private def tupleFromProduct[A](a: A)(using m: ProductOf[A])(using A <:< Product
     Tuple.fromProductTyped[A & Product](coerce(a))(using coeMirror)
 end tupleFromProduct
 trait Functor[F[_]]:
+    self =>
     def covariant[A, B](using A <:< B): F[A] <:< F[B]
+
     extension [A](fa: F[A])
         def map[B](f: A => B): F[B]
         def widen[B](using ev: A <:< B): F[B] = covariant[A, B](fa)
+
+    def composeFunctor[G[_]: Functor]: Functor[[x] =>> F[G[x]]] = new:
+        def covariant[A, B](using A <:< B): F[G[A]] <:< F[G[B]]    = self.composeCovariant
+        extension [A](fga: F[G[A]]) def map[B](f: A => B): F[G[B]] = self.map(fga)(_.map(f))
+
+    def composeCovariant[G[_], A, B](using ev: A <:< B, G: Functor[G]): F[G[A]] <:< F[G[B]] =
+        covariant(using G.covariant)
+
+end Functor
 
 object Functor:
 
@@ -27,6 +39,8 @@ object Functor:
 
     inline def derived[F[+_]]: Cov[F] = new:
         extension [A](fa: F[A]) def map[B](f: A => B): F[B] = functorCall[A, B, F[A], F[B]](fa, f)
+
+    export instances.{vectorFunctor, idFunctor, listFunctor}
 
     inline def functorCall[A, B, FA, FB](fa: FA, f: A => B): FB =
         summonFrom {
@@ -71,26 +85,6 @@ object Functor:
                                 case h: Head => summonInline[b <:< FB](functorCall[A, B, a, b](h, f))
                                 case _       => functorSum[A, B, FA, FB, ta, tb](pa, f)
                         }
-
-    trait TraverseMonoidal[F[+_]] extends Traverse.Cov[F], Monoidal[F]
-
-    given TraverseMonoidal[[x] =>> x] with
-        def pure[A](x: A): A = x
-        extension [A](a: A)
-            override def map[B](f: A => B): B             = f(a)
-            def map2[B, C](b: => B)(f: (A, B) => C)       = f(a, b)
-            def traverse[M[_]: Monoidal, B](f: A => M[B]) = f(a)
-
-    given TraverseMonoidal[List] with
-        extension [A](fa: List[A])
-            override def map2[B, C](fb: => List[B])(f: (A, B) => C): List[C]               =
-                for a <- fa; b <- fb yield f(a, b)
-            override def traverse[M[_], B](f: A => M[B])(using M: Monoidal[M]): M[List[B]] =
-                fa match
-                    case Nil     => M.pure(Nil)
-                    case a :: ta => f(a).map2(ta.traverse(f))(_ :: _)
-        def pure[A](x: A) = x :: Nil
-    end given
 
     trait HeadMatch[AX, BX, A, B]:
         def apply(ax: AX)(f: A => B): BX
