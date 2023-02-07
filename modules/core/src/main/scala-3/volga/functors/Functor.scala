@@ -15,11 +15,17 @@ private def tupleFromProduct[A](a: A)(using m: ProductOf[A])(using A <:< Product
     Tuple.fromProductTyped[A & Product](coerce(a))(using coeMirror)
 end tupleFromProduct
 trait Functor[F[_]]:
-    extension [A](fa: F[A]) def map[B](f: A => B): F[B]
+    def covariant[A, B](using A <:< B): F[A] <:< F[B]
+    extension [A](fa: F[A])
+        def map[B](f: A => B): F[B]
+        def widen[B](using ev: A <:< B): F[B] = covariant[A, B](fa)
 
 object Functor:
 
-    inline def derived[F[_]]: Functor[F] = new:
+    trait Cov[F[+_]] extends Functor[F]:
+        def covariant[A, B](using ev: A <:< B): F[A] <:< F[B] = ev.liftCo[F]
+
+    inline def derived[F[+_]]: Cov[F] = new:
         extension [A](fa: F[A]) def map[B](f: A => B): F[B] = functorCall[A, B, F[A], F[B]](fa, f)
 
     inline def functorCall[A, B, FA, FB](fa: FA, f: A => B): FB =
@@ -66,66 +72,39 @@ object Functor:
                                 case _       => functorSum[A, B, FA, FB, ta, tb](pa, f)
                         }
 
-    given Traverse[[x] =>> x] with Monoidal[[x] =>> x] with
+    trait TraverseMonoidal[F[+_]] extends Traverse.Cov[F], Monoidal[F]
+
+    given TraverseMonoidal[[x] =>> x] with
         def pure[A](x: A): A = x
         extension [A](a: A)
             override def map[B](f: A => B): B             = f(a)
-            def map2[B, C](b: B)(f: (A, B) => C)          = f(a, b)
+            def map2[B, C](b: => B)(f: (A, B) => C)       = f(a, b)
             def traverse[M[_]: Monoidal, B](f: A => M[B]) = f(a)
+
+    given TraverseMonoidal[List] with
+        extension [A](fa: List[A])
+            override def map2[B, C](fb: => List[B])(f: (A, B) => C): List[C]               =
+                for a <- fa; b <- fb yield f(a, b)
+            override def traverse[M[_], B](f: A => M[B])(using M: Monoidal[M]): M[List[B]] =
+                fa match
+                    case Nil     => M.pure(Nil)
+                    case a :: ta => f(a).map2(ta.traverse(f))(_ :: _)
+        def pure[A](x: A) = x :: Nil
+    end given
 
     trait HeadMatch[AX, BX, A, B]:
         def apply(ax: AX)(f: A => B): BX
 
     object HeadMatch:
-        given [A, B]: HeadMatch[A, B, A, B] with
+
+        transparent trait Primary
+        given [A, B]: HeadMatch[A, B, A, B] with Primary with
             def apply(a: A)(f: A => B) = f(a)
         given [A, B, X]: HeadMatch[X, X, A, B] with
             def apply(x: X)(f: A => B): X = x
+
+        given [A, B, F[_]: Functor]: HeadMatch[F[A], F[B], A, B] with
+            def apply(a: F[A])(f: A => B) = a.map(f)
+    end HeadMatch
+
 end Functor
-
-trait Monoidal[F[_]] extends Functor[F]:
-    def pure[A](a: A): F[A]
-    extension [A](fa: F[A])
-        def map2[B, C](fb: F[B])(f: (A, B) => C): F[C]
-
-        def map[B](f: A => B): F[B] = fa.map2(pure(()))((a, _) => f(a))
-
-trait Traverse[F[_]] extends Functor[F]:
-    extension [A](fa: F[A])
-        def traverse[M[_], B](f: A => M[B])(using Monoidal[M]): M[F[B]]
-        def map[B](f: A => B): F[B] = traverse[[x] =>> x, B](f)
-
-object Traverse:
-    // inline given derived[T[_] <: Product]: Functor[T] = new:
-    //     extension [A](fa: T[A])
-    //         def map[B](f: A => B): T[B] =
-    //             summonFrom { case ma: ProductOf[T[A]] =>
-    //                 type TA = ma.MirroredElemTypes
-    //                 summonFrom { case mb: ProductOf[T[B]] =>
-    //                     type TB = mb.MirroredElemTypes
-    //                     val ta = Tuple.fromProductTyped(fa)(using ma)
-    //                     val tb = functorCall[A, B, TA, TB](ta, f)
-    //                     mb.fromTuple(tb)
-    //                 }
-    //             }
-
-    inline def traverseCall[A, B, TA <: Tuple, TB <: Tuple, M[_]](t: TA, f: A => M[B])(using M: Monoidal[M]): M[TB] =
-        inline t match
-            case EmptyTuple   =>
-                M.pure(summonInline[EmptyTuple <:< TB](EmptyTuple))
-            case t: (a *: ta) =>
-                inline erasedValue[TB] match
-                    case _: (b *: tb) =>
-                        val mtb: M[tb] = traverseCall[A, B, ta, tb, M](t.tail, f)
-                        val mb: M[b]   = summonInline[HeadMatch[a, b, A, B, M]](t.head)(f)
-                        mb.map2(mtb)((b, tb) => summonInline[(b *: tb) =:= TB](b *: tb))
-
-    trait HeadMatch[AX, BX, A, B, M[_]]:
-        def apply(ax: AX)(f: A => M[B]): M[BX]
-
-    object HeadMatch:
-        given [A, B, M[_]]: HeadMatch[A, B, A, B, M[_]] with
-            def apply(a: A)(f: A => M[B]) = f(a)
-        given [A, B, X, M[_]](using M: Monoidal[M]): HeadMatch[X, X, A, B, M] with
-            def apply(x: X)(f: A => M[B]): M[X] = M.pure(x)
-end Traverse
