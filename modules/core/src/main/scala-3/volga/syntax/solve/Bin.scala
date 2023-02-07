@@ -195,11 +195,10 @@ object BinOp:
     def Continue(binOp: BinOp*) = Exchange(true, binOp.toVector)
 
     final case class Error(op: BinOp, tree: Bin[Any], path: List[Index] = Nil) {
-        def ::(i: Index): Error     = copy(path = i :: path)
-        def ~(bin: Bin[Any]): Error = copy(tree = bin)
+        def ::(i: Index): Error         = copy(path = i :: path)
+        def ~(bin: Bin[Any]): Error     = copy(tree = bin)
+        override def toString(): String = s"error $op : ${path.mkString("-")}"
     }
-
-    // final implicit val showError: Show[Error] = err => s"error ${err.op} : ${err.path.mkString("-")}"
 end BinOp
 
 final case class BinZipper[+A](
@@ -226,10 +225,10 @@ final case class BinZipper[+A](
     def goRight = go(R)
 
     def grow(side: Side) =
-        val bin1 = side match {
+        val bin1 = side match
             case L => Branch(Bud, bin)
             case R => Branch(bin, Bud)
-        }
+
         Some(BinZipper(bin1, history put Grow(side), parent))
 
     def consume(side: Side) =

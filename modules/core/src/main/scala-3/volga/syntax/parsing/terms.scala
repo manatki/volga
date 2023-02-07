@@ -11,3 +11,8 @@ enum STerm[+S, +T]:
     case Untupling[+S](src: S, tgt: S, index: Int)                                extends STerm[S, Nothing], Pos.Tupling
     case Result[+S](results: Vector[S])                                           extends STerm[S, Nothing], Pos.End
     case Application[+S, +T](applied: T, args: Vector[S])                         extends STerm[S, T], Pos.Mid, Pos.End
+
+// enum StageTerm[+S, +T]
+//     case From
+
+

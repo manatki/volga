@@ -7,7 +7,8 @@ import volga.{Aliases, SymmetricCat}
 import scala.quoted.Quotes
 import scala.quoted.Expr
 import scala.quoted.Type
-import volga.syntax.parsing.{STerm, Pos, MParsing}
+import volga.syntax.parsing.{Pos, MParsing}
+import volga.syntax.parsing.STerm 
 import scala.quoted.ToExpr.SetToExpr
 import scala.{PartialFunction as =\>}
 import scala.collection.View.Empty

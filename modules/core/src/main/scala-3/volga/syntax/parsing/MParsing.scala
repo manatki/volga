@@ -7,6 +7,10 @@ import scala.annotation.tailrec
 import volga.free.Nat.Vec
 
 import volga.syntax.parsing.VError
+
+import volga.syntax.parsing.Pos.{Mid, End, Tupling}
+import volga.syntax.parsing.STerm
+
 final class MParsing[q <: Quotes & Singleton](using val q: q):
     import q.reflect.*
     import Pos.*
