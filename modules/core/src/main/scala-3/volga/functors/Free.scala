@@ -9,7 +9,7 @@ enum Free[+F[+_], +A]:
 
     final def foldMap[M[+x]](t: [A] => F[A] => M[A])(using M: Monad[M]): M[A] =
         M.recursion(this) {
-            case Pure(a)     => M.pure(Right(M.pure(a)))
+            case Pure(a)     => M.pure(Right(a))
             case Embed(fa)   => t(fa).map(a => Left(Free.Pure(a)))
             case Bind(fa, f) =>
                 fa match
@@ -27,3 +27,16 @@ object Free:
     given [F[+_]]: Monad[Free[F, _]] with
         def pure[A](a: A)                                                = Pure(a)
         extension [A](fa: Free[F, A]) def flatMap[B](f: A => Free[F, B]) = fa.flatMap(f)
+
+
+@main def check() = 
+    def go(x: Int, trace: Int = 0): Free[[a] =>> (a, a), Int] = 
+        if x == 0 then Free.Pure(trace)
+        else if x % 1000 == 0 then 
+            Free.Embed[[a] =>> (a, a), Int]((1, 0)).flatMap(i => go(x - 1, trace * 10 + i))
+        else Free.Pure(()).flatMap(_ => go(x - 1, trace))
+
+    val res = go(10000).foldMap([A] => (x: (A, A)) => Vector(x._1, x._2))
+
+    println(Free.Embed(List(1, 2, 3)).foldMap([A] => (x: List[A]) => x))
+    println(res)

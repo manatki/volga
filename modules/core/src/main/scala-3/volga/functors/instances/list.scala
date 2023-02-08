@@ -13,7 +13,7 @@ given listFunctor: TraverseMonad[List] with
             M.tabulateTraverse(values.length)(i => f(values(i)))
     def pure[A](x: A)                = x :: Nil
 
-    override def recursion[A, B](a: A)(f: A => List[Either[A, List[B]]]): List[B] =
+    override def recursion[A, B](a: A)(f: A => List[Either[A, B]]): List[B] =
         Monad.collectionRecursion(List, a, f)
 
 end listFunctor
