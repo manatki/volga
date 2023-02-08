@@ -1,11 +1,6 @@
 package volga.syntax.parsing
 import volga.functors.*
 
-package Pos:
-    trait Mid
-    trait End
-    trait Tupling
-
 object VectorOf:
     opaque type VectorOf[+F[+_], +A] <: Vector[F[A]] = Vector[F[A]]
 
@@ -18,6 +13,11 @@ object VectorOf:
 type VectorOf[+F[+_], +A] = VectorOf.VectorOf[F, A]
 
 case class App[+S, +T](applied: T, args: Vector[S]) derives Traverse
+
+package Pos:
+    trait Mid
+    trait End
+    trait Tupling
 
 enum STerm[+S, +T] derives Traverse:
     case Assignment[+S, +T](receivers: Vector[S], application: App[S, T]) extends STerm[S, T], Pos.Mid

@@ -1,4 +1,4 @@
 package volga.functors
 package instances
 
-trait TraverseMonoidal[F[+_]] extends Traverse.Cov[F], Monoidal[F]
+trait TraverseMonad[F[+_]] extends Traverse[F], Monad[F]

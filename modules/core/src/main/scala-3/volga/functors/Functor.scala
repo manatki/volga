@@ -3,7 +3,6 @@ package volga.functors
 import compiletime.*
 import deriving.Mirror.{ProductOf, SumOf}
 import scala.reflect.TypeTest
-import instances.TraverseMonoidal
 
 private def subtypeToIntersectionEq[A, B](using ev: A <:< B): A =:= (A & B) =
     given (A <:< (A & B)) = ev.liftCo[[x] =>> A & x]
@@ -15,29 +14,20 @@ private def tupleFromProduct[A](a: A)(using m: ProductOf[A])(using A <:< Product
     val coeMirror = coerce.liftCo[MP](m)
     Tuple.fromProductTyped[A & Product](coerce(a))(using coeMirror)
 end tupleFromProduct
-trait Functor[F[_]]:
+trait Functor[F[+_]]:
     self =>
-    def covariant[A, B](using A <:< B): F[A] <:< F[B]
 
     extension [A](fa: F[A])
         def map[B](f: A => B): F[B]
-        def widen[B](using ev: A <:< B): F[B] = covariant[A, B](fa)
 
-    def composeFunctor[G[_]: Functor]: Functor[[x] =>> F[G[x]]] = new:
-        def covariant[A, B](using A <:< B): F[G[A]] <:< F[G[B]]    = self.composeCovariant
+    def composeFunctor[G[+_]: Functor]: Functor[[x] =>> F[G[x]]] = new:
         extension [A](fga: F[G[A]]) def map[B](f: A => B): F[G[B]] = self.map(fga)(_.map(f))
-
-    def composeCovariant[G[_], A, B](using ev: A <:< B, G: Functor[G]): F[G[A]] <:< F[G[B]] =
-        covariant(using G.covariant)
 
 end Functor
 
 object Functor:
 
-    trait Cov[F[+_]] extends Functor[F]:
-        def covariant[A, B](using ev: A <:< B): F[A] <:< F[B] = ev.liftCo[F]
-
-    inline def derived[F[+_]]: Cov[F] = new:
+    inline def derived[F[+_]]: Functor[F] = new:
         extension [A](fa: F[A]) def map[B](f: A => B): F[B] = functorCall[A, B, F[A], F[B]](fa, f)
 
     export instances.{vectorFunctor, idFunctor, listFunctor}
@@ -97,7 +87,7 @@ object Functor:
         given [A, B, X]: HeadMatch[X, X, A, B] with
             def apply(x: X)(f: A => B): X = x
 
-        given [A, B, F[_]: Functor]: HeadMatch[F[A], F[B], A, B] with
+        given [A, B, F[+_]: Functor]: HeadMatch[F[A], F[B], A, B] with
             def apply(a: F[A])(f: A => B) = a.map(f)
     end HeadMatch
 

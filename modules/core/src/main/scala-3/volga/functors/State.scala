@@ -66,17 +66,17 @@ end State
 object State:
     def update[S](f: S => S): State[S, Nothing, Unit] = Modify(s => (f(s), ()))
 
-    given [S, E]: Monoidal.Cov[State[S, E, _]] with
+    given [S, E]: Monad[State[S, E, _]] with
         def pure[A](x: A) = Success(x)
         extension [A](sa: State[S, E, A])
-            def map2[B, C](sb: => State[S, E, B])(f: (A, B) => C) = for a <- sa; b <- sb yield f(a, b)
-            def >>[B](sb: State[S, E, B])                         = sa.flatMap(_ => sb)
-            override def map[B](f: A => B)                        = sa.map(f)
+            def flatMap[B](f: A => State[S, E, B]) = sa.flatMap(f)
+            override def map[B](f: A => B)         = sa.map(f)
 end State
 
 @main def foooo() =
     import Functor.vectorFunctor
-    val (s, State.Success(bs)) =
-        Vector.range(1L, 100000L).traverse(a => State.update[Long](_ + a) >> State.Success(a)).run(0L)
-    println(s"state = $s, sum = ${bs.sum}")
-    println("Hello")
+    Vector.range(1L, 100000L).traverse(a => State.update[Long](_ + a) >> State.Success(a)).run(0L) match
+        case (s, State.Success(bs)) =>
+            println(s"state = $s, sum = ${bs.sum}")
+            println("Hello")
+        case _                      =>
