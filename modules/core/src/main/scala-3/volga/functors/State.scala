@@ -33,13 +33,6 @@ enum State[S, +E, +A]:
           def onSuccess(s: S, res: A) = f(res)
     )
 
-    def map[A1](f: A => A1): State[S, E, A1] = Bind(
-      this,
-      new:
-          def onError(s: S, err: E)   = Error(err)
-          def onSuccess(s: S, res: A) = Success(f(res))
-    )
-
     def handleError[E1, A1](f: E => State[S, E1, A1]): State[S, E1, A | A1] = Bind(
       this,
       new:
@@ -67,15 +60,15 @@ object State:
     def update[S](f: S => S): State[S, Nothing, Unit] = Modify(s => (f(s), ()))
 
     given [S, E]: Monad[State[S, E, _]] with
-        def pure[A](x: A) = Success(x)
-        extension [A](sa: State[S, E, A])
-            def flatMap[B](f: A => State[S, E, B]) = sa.flatMap(f)
-            override def map[B](f: A => B)         = sa.map(f)
+        def pure[A](x: A)                                                        = Success(x)
+        extension [A](sa: State[S, E, A]) def flatMap[B](f: A => State[S, E, B]) = sa.flatMap(f)
 end State
 
 @main def foooo() =
     import Functor.vectorFunctor
-    Vector.range(1L, 100000L).traverse(a => State.update[Long](_ + a) >> State.Success(a)).run(0L) match
+    println(Vector.range(1L, 1000000L).traverse(a => List(a)).iterator.flatten.sum)
+
+    Vector.range(1L, 1000000L).traverse(a => State.update[Long](_ + a) >> State.Success(a)).run(0L) match
         case (s, State.Success(bs)) =>
             println(s"state = $s, sum = ${bs.sum}")
             println("Hello")
