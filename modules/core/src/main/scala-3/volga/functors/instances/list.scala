@@ -2,6 +2,7 @@ package volga.functors
 package instances
 
 import scala.annotation.tailrec
+import volga.functors.Monad.Recur
 
 given listFunctor: TraverseMonad[List] with
 
@@ -15,5 +16,8 @@ given listFunctor: TraverseMonad[List] with
 
     override def recursion[A, B](a: A)(f: A => List[Either[A, B]]): List[B] =
         Monad.collectionRecursion(List, a, f)
+
+    override def recur[A, B](a: A)(f: A => Recur[List, A, B]): List[B] = 
+        Monad.collectionRecur(List, a, f)
 
 end listFunctor

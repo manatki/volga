@@ -53,7 +53,7 @@ object Functor:
 
     inline def functorProduct[A, B, TA <: Tuple, TB <: Tuple](ta: TA, f: A => B): TB =
         inline ta match
-            case EmptyTuple   =>
+            case _: EmptyTuple   =>
                 summonInline[EmptyTuple <:< TB](EmptyTuple)
             case t: (a *: ta) =>
                 inline erasedValue[TB] match

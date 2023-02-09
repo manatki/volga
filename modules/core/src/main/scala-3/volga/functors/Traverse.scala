@@ -49,7 +49,7 @@ object Traverse:
 
     inline def traverseProduct[A, B, TA <: Tuple, TB <: Tuple, M[+_]](t: TA, f: A => M[B])(using M: Monoidal[M]): M[TB] =
         inline t match
-            case EmptyTuple   =>
+            case _: EmptyTuple   =>
                 M.pure(summonInline[EmptyTuple <:< TB](EmptyTuple))
             case t: (a *: ta) =>
                 inline erasedValue[TB] match
@@ -60,7 +60,7 @@ object Traverse:
 
     inline def traverseSum[A, B, FA, FB, SA, SB, M[+_]: Monoidal](pa: FA, f: A => M[B]): M[FB] =
         inline erasedValue[SA] match
-            case EmptyTuple   =>
+            case _: EmptyTuple   =>
                 throw IllegalArgumentException(s"can't match $pa")
             case t: (a *: ta) =>
                 type Head = a
