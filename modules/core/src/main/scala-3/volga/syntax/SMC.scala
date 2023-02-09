@@ -8,7 +8,7 @@ import scala.quoted.Quotes
 import scala.quoted.Expr
 import scala.quoted.Type
 import volga.syntax.parsing.{Pos, MParsing}
-import volga.syntax.parsing.STerm 
+import volga.syntax.parsing.STerm
 import scala.quoted.ToExpr.SetToExpr
 import scala.{PartialFunction as =\>}
 import scala.collection.View.Empty
@@ -91,7 +91,7 @@ object smc:
                     s"""|failure
                         |${expr.asTerm}""".stripMargin
 
-            report.warning(s, expr)
+            report.error(s, expr)
             '{ $syn.dummy }
         end just
 

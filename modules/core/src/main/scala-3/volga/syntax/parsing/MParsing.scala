@@ -25,15 +25,20 @@ final class MParsing[q <: Quotes & Singleton](using val q: q):
     val InlineTerm: Inlined =\> Term =
         case Inlined(None, Nil, t) => t
 
+    val CFBody: Term =\> Term = 
+        case Block(Nil, t) => t
+        case t => t
+
     val CFBlock: Tree =\> Tree =
         case InlineTerm(
               Block(
-                List(DefDef(nameD, _, _, Some(InlineTerm(Block(Nil, t))))),
+                List(DefDef(nameD, _, _, Some(InlineTerm(CFBody(t))))),
                 Closure(Ident(nameR), None)
               )
             ) if nameD == nameR =>
             t
     end CFBlock
+
 
     val asMidSTerm: Tree =\> MidT =
         case asAnywhereTerm(t)                                                                  => t

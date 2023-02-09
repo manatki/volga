@@ -1,6 +1,6 @@
 package volga.syntax.solve
 
-import volga.syntax.solve.Bin._
+import volga.syntax.solve.Bin.*
 import volga.syntax.solve.BinHistory.{HChain, HConsume, HGrow, HRotate, HSplit, HSwap}
 import volga.syntax.solve.BinOp._
 import volga.syntax.solve.binop._
@@ -8,8 +8,13 @@ import volga.syntax.solve.binop._
 import scala.annotation.tailrec
 import scala.collection.Factory
 import volga.util.fold.*
+import volga.functors.Traverse
 
-sealed trait Bin[+A] {
+enum Bin[+A] derives Traverse:
+    case Branch(l: Bin[A], r: Bin[A])
+    case Leaf(a: A)
+    case Bud
+
     def elems: Vector[A] = this.to(Vector)
 
     def mod(binOp: BinOp): Either[Error, Bin[A]] =
@@ -83,52 +88,13 @@ sealed trait Bin[+A] {
         go(this)
         builder.result()
     end to
+end Bin
 
-}
-
-object Bin {
-    final case class Branch[+A](l: Bin[A], r: Bin[A]) extends Bin[A] {
-        def apply(side: Side) = side match {
-            case L => l
-            case R => r
-        }
-    }
-    final case class Leaf[+A](a: A)                   extends Bin[A]
-    case object Bud                                   extends Bin[Nothing]
-
-    // implicit val traverse: Traverse[Bin] = new Traverse[Bin] {
-    //     def traverse[G[_]: Applicative, A, B](fa: Bin[A])(f: A => G[B]): G[Bin[B]]        =
-    //         fa match {
-    //             case Leaf(a)      => f(a).map(Leaf(_))
-    //             case Branch(l, r) => traverse(l)(f).map2(traverse(r)(f))(Branch(_, _))
-    //             case Bud          => (Bud: Bin[B]).pure[G]
-    //         }
-    //     def foldLeft[A, B](fa: Bin[A], b: B)(f: (B, A) => B): B                           = {
-    //         @tailrec def go(b1: B, bin: Bin[A], stack: List[Bin[A]]): B =
-    //             bin match {
-    //                 case Leaf(a)      =>
-    //                     val b2 = f(b1, a)
-    //                     stack match {
-    //                         case head :: tail => go(b2, head, tail)
-    //                         case Nil          => b2
-    //                     }
-    //                 case Branch(l, r) => go(b1, l, r :: stack)
-    //                 case Bud          =>
-    //                     stack match {
-    //                         case head :: tail => go(b, head, tail)
-    //                         case Nil          => b
-    //                     }
-    //             }
-    //         go(b, fa, Nil)
-    //     }
-    //     def foldRight[A, B](fa: Bin[A], lb: Eval[B])(f: (A, Eval[B]) => Eval[B]): Eval[B] =
-    //         fa match {
-    //             case Leaf(a)      => f(a, lb)
-    //             case Branch(l, r) => foldRight(l, Eval.defer(foldRight(r, lb)(f)))(f)
-    //             case Bud          => lb
-    //         }
-    // }
-}
+object Bin:
+    extension [A](b: Branch[A])
+        def apply(s: Side) = s match
+            case L => b.l
+            case R => b.r
 
 package binop:
     sealed trait Index

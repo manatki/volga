@@ -17,8 +17,7 @@ end tupleFromProduct
 trait Functor[F[+_]]:
     self =>
 
-    extension [A](fa: F[A])
-        def map[B](f: A => B): F[B]
+    extension [A](fa: F[A]) def map[B](f: A => B): F[B]
 
     def composeFunctor[G[+_]: Functor]: Functor[[x] =>> F[G[x]]] = new:
         extension [A](fga: F[G[A]]) def map[B](f: A => B): F[G[B]] = self.map(fga)(_.map(f))
@@ -53,9 +52,9 @@ object Functor:
 
     inline def functorProduct[A, B, TA <: Tuple, TB <: Tuple](ta: TA, f: A => B): TB =
         inline ta match
-            case _: EmptyTuple   =>
+            case _: EmptyTuple =>
                 summonInline[EmptyTuple <:< TB](EmptyTuple)
-            case t: (a *: ta) =>
+            case t: (a *: ta)  =>
                 inline erasedValue[TB] match
                     case _: (b *: tb) =>
                         val tb: tb = functorProduct[A, B, ta, tb](t.tail, f)
@@ -64,9 +63,9 @@ object Functor:
 
     inline def functorSum[A, B, FA, FB, SA, SB](pa: FA, f: A => B): FB =
         inline erasedValue[SA] match
-            case EmptyTuple   =>
+            case _: EmptyTuple =>
                 throw IllegalArgumentException(s"can't match $pa")
-            case t: (a *: ta) =>
+            case t: (a *: ta)  =>
                 type Head = a
                 inline erasedValue[SB] match
                     case _: (b *: tb) =>
