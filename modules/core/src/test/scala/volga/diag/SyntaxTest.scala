@@ -16,8 +16,8 @@ class SyntaxTest extends munit.FunSuite:
         val x: DAG[0, 2] = prop.just {
             val x      = aNode()
             val (u, v, w) = cNode(x)
-            bNode(u)
-            (v, w)
+            bNode(v)
+            (w, u)
         }
     }
 end SyntaxTest

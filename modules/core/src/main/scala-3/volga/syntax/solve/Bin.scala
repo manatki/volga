@@ -2,8 +2,8 @@ package volga.syntax.solve
 
 import volga.syntax.solve.Bin.*
 import volga.syntax.solve.BinHistory.{HChain, HConsume, HGrow, HRotate, HSplit, HSwap}
-import volga.syntax.solve.BinOp._
-import volga.syntax.solve.binop._
+import volga.syntax.solve.BinOp.*
+import volga.syntax.solve.binop.*
 
 import scala.annotation.tailrec
 import scala.collection.Factory

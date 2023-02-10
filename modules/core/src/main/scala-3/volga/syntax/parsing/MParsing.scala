@@ -16,18 +16,34 @@ final class MParsing[q <: Quotes & Singleton](using val q: q):
     import q.reflect.*
     import Pos.*
 
-    private type Mid      = STerm[String, Tree] & Pos.Mid
-    private type MidT     = STerm[String, Tree] & (Pos.Mid | Pos.Tupling)
-    private type End      = STerm[String, Tree] & Pos.End
-    private type Anywhere = STerm[String, Tree] & Pos.Mid & Pos.End
-    private type Appl     = App[String, Tree]
+    case class Var(name: String, typ: Option[TypeRepr] = None):
+        override def toString: String = typ match
+            case None    => name
+            case Some(t) => s"$name: ${t.show}"
+
+    object Var:
+        def of(name: String, t: TypeTree): Var =
+            t.tpe match
+                case AppliedType(t1, List(t2)) => Var(name, Some(simp(t2)))
+                case _                         => Var(name)
+
+        private def simp(t: TypeRepr): TypeRepr = t match
+            case AppliedType(t, ts) => AppliedType(t.dealias, ts.map(simp))
+            case t                  => t.dealias
+    end Var
+
+    private type PMid      = STerm[Var, Tree] & Pos.Mid
+    private type PMidTup   = STerm[Var, Tree] & (Pos.Mid | Pos.Tupling)
+    private type PEnd      = STerm[Var, Tree] & Pos.End
+    private type PAnywhere = STerm[Var, Tree] & Pos.Mid & Pos.End
+    private type PApp      = App[Var, Tree]
 
     val InlineTerm: Inlined =\> Term =
         case Inlined(None, Nil, t) => t
 
-    val CFBody: Term =\> Term = 
+    val CFBody: Term =\> Term =
         case Block(Nil, t) => t
-        case t => t
+        case t             => t
 
     val CFBlock: Tree =\> Tree =
         case InlineTerm(
@@ -39,24 +55,23 @@ final class MParsing[q <: Quotes & Singleton](using val q: q):
             t
     end CFBlock
 
-
-    val asMidSTerm: Tree =\> MidT =
+    val asMidSTerm: Tree =\> PMidTup =
         case asAnywhereTerm(t)                                                                  => t
-        case ValDef(name, _, Some(asApplication(app)))                                          =>
-            STerm.Assignment(Vector(name), app)
+        case ValDef(name, t, Some(asApplication(app)))                                          =>
+            STerm.Assignment(Vector(Var.of(name, t)), app)
         case ValDef(name, _, Some(Match(Typed(asApplication(app), t @ TupleRepr(i)), List(_)))) =>
-            STerm.Tupled(name, i, app)
-        case ValDef(name, _, Some(Select(Ident(tname), s"_${OfInt(i)}")))                       =>
-            STerm.Untupling(tname, name, i - 1)
+            STerm.Tupled(Var(name), i, app)
+        case ValDef(name, t, Some(Select(Ident(tname), s"_${OfInt(i)}")))                       =>
+            STerm.Untupling(Var(tname), Var.of(name, t), i - 1)
     end asMidSTerm
 
-    val asEndTerm: Tree =\> End =
-        case Typed(Ident(name), _)                       => STerm.Result(Vector(name))
-        case Apply(TupleApp(()), ident.travector(names)) => STerm.Result(names)
+    val asEndTerm: Tree =\> PEnd =
+        case Typed(Ident(name), _)                       => STerm.Result(Vector(Var(name)))
+        case Apply(TupleApp(()), ident.travector(names)) => STerm.Result(names.map(Var(_)))
 
-    val asApplication: Tree =\> Appl =
+    val asApplication: Tree =\> PApp =
         case Apply(Apply(_, List(t)), ident.travector(names)) =>
-            App(t, names)
+            App(t, names.map(Var(_)))
 
     val ident: Term =\> String =
         case Ident(name) => name
@@ -64,7 +79,7 @@ final class MParsing[q <: Quotes & Singleton](using val q: q):
     val TupleApp: Term =\> Unit =
         case TypeApply(Select(Ident(s"Tuple$_"), "apply"), _) =>
 
-    val asAnywhereTerm: Tree =\> Anywhere =
+    val asAnywhereTerm: Tree =\> PAnywhere =
         case asApplication(app) => STerm.Application(app)
     object TupleRepr:
         @threadUnsafe lazy val ConsS = TypeRepr.of[? *: ?].classSymbol
@@ -93,36 +108,36 @@ final class MParsing[q <: Quotes & Singleton](using val q: q):
 
     private def fullVector[A] = ({ case Some(a) => a }: Option[A] =\> A).travector
 
-    case class TuplingState(app: Option[Appl] = None, bindings: Vector[Option[String]] = Vector.empty, arity: Int = 0):
-        def addBinding(index: Int, binding: String) =
+    case class TuplingState(app: Option[PApp] = None, bindings: Vector[Option[Var]] = Vector.empty, arity: Int = 0):
+        def addBinding(index: Int, binding: Var) =
             val newBindings =
                 if bindings.size > index then bindings.updated(index, Some(binding))
                 else bindings ++ Vector.fill(index - bindings.size)(None) :+ Some(binding)
             copy(bindings = newBindings)
 
-        def define(app: Appl, arity: Int) = copy(app = Some(app), arity = arity)
+        def define(app: PApp, arity: Int) = copy(app = Some(app), arity = arity)
 
-    val CompleteTuplingState: TuplingState =\> Mid =
+    val CompleteTuplingState: TuplingState =\> PMid =
         case TuplingState(Some(app), fullVector(xs), arity) if arity > 0 && xs.size == arity =>
             STerm.Assignment(xs, app)
 
     case class DetupleState(
         tuplings: Map[String, TuplingState] = Map.empty,
-        result: Vector[Mid] = Vector.empty
+        result: Vector[PMid] = Vector.empty
     ):
-        private def add(mid: Mid) = copy(result = result :+ mid)
+        private def add(mid: PMid) = copy(result = result :+ mid)
 
-        private def updateTupling(name: String)(f: TuplingState => TuplingState) =
-            f(tuplings.getOrElse(name, TuplingState())) match
-                case CompleteTuplingState(mid) => add(mid).copy(tuplings = tuplings - name)
-                case tupling                   => copy(tuplings = tuplings.updated(name, tupling))
+        private def updateTupling(v: Var)(f: TuplingState => TuplingState) =
+            f(tuplings.getOrElse(v.name, TuplingState())) match
+                case CompleteTuplingState(mid) => add(mid).copy(tuplings = tuplings - v.name)
+                case tupling                   => copy(tuplings = tuplings.updated(v.name, tupling))
 
-        def push(cmd: STerm[String, Tree] & (Pos.Mid | Pos.Tupling)): DetupleState = cmd match
+        def push(cmd: STerm[Var, Tree] & (Pos.Mid | Pos.Tupling)): DetupleState = cmd match
             case STerm.Tupled(receiver, arity, application) => updateTupling(receiver)(_.define(application, arity))
             case STerm.Untupling(src, tgt, index)           => updateTupling(src)(_.addBinding(index, tgt))
             case term: Pos.Mid                              => add(term)
 
-        def end: Either[VError, Vector[Mid]] =
+        def end: Either[VError, Vector[PMid]] =
             if tuplings.isEmpty then Right(result)
             else
                 Left(() =>
@@ -135,7 +150,9 @@ final class MParsing[q <: Quotes & Singleton](using val q: q):
 
     end DetupleState
 
-    def detuple(commands: Iterable[MidT], acc: Vector[Mid] = Vector.empty)(using Quotes): Either[VError, Vector[Mid]] =
+    def detuple(commands: Iterable[PMidTup], acc: Vector[PMid] = Vector.empty)(using
+        Quotes
+    ): Either[VError, Vector[PMid]] =
         commands.foldLeft(DetupleState())(_.push(_)).end
 
 end MParsing
