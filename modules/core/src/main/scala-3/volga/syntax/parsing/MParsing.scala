@@ -15,28 +15,14 @@ import volga.syntax.parsing.App
 final class MParsing[q <: Quotes & Singleton](using val q: q):
     import q.reflect.*
     import Pos.*
+    val vars = Vars[q.type]()
+    import vars.*
 
-    case class Var(name: String, typ: Option[TypeRepr] = None):
-        override def toString: String = typ match
-            case None    => name
-            case Some(t) => s"$name: ${t.show}"
-
-    object Var:
-        def of(name: String, t: TypeTree): Var =
-            t.tpe match
-                case AppliedType(t1, List(t2)) => Var(name, Some(simp(t2)))
-                case _                         => Var(name)
-
-        private def simp(t: TypeRepr): TypeRepr = t match
-            case AppliedType(t, ts) => AppliedType(t.dealias, ts.map(simp))
-            case t                  => t.dealias
-    end Var
-
-    private type PMid      = STerm[Var, Tree] & Pos.Mid
-    private type PMidTup   = STerm[Var, Tree] & (Pos.Mid | Pos.Tupling)
-    private type PEnd      = STerm[Var, Tree] & Pos.End
-    private type PAnywhere = STerm[Var, Tree] & Pos.Mid & Pos.End
-    private type PApp      = App[Var, Tree]
+    private type PMid      = STerm[Var[q], Tree] & Pos.Mid
+    private type PMidTup   = STerm[Var[q], Tree] & (Pos.Mid | Pos.Tupling)
+    private type PEnd      = STerm[Var[q], Tree] & Pos.End
+    private type PAnywhere = STerm[Var[q], Tree] & Pos.Mid & Pos.End
+    private type PApp      = App[Var[q], Tree]
 
     val InlineTerm: Inlined =\> Term =
         case Inlined(None, Nil, t) => t
@@ -58,20 +44,20 @@ final class MParsing[q <: Quotes & Singleton](using val q: q):
     val asMidSTerm: Tree =\> PMidTup =
         case asAnywhereTerm(t)                                                                  => t
         case ValDef(name, t, Some(asApplication(app)))                                          =>
-            STerm.Assignment(Vector(Var.of(name, t)), app)
+            STerm.Assignment(Vector(varOf(name, t)), app)
         case ValDef(name, _, Some(Match(Typed(asApplication(app), t @ TupleRepr(i)), List(_)))) =>
-            STerm.Tupled(Var(name), i, app)
+            STerm.Tupled(varNamed(name), i, app)
         case ValDef(name, t, Some(Select(Ident(tname), s"_${OfInt(i)}")))                       =>
-            STerm.Untupling(Var(tname), Var.of(name, t), i - 1)
+            STerm.Untupling(varNamed(tname), varOf(name, t), i - 1)
     end asMidSTerm
 
     val asEndTerm: Tree =\> PEnd =
-        case Typed(Ident(name), _)                       => STerm.Result(Vector(Var(name)))
-        case Apply(TupleApp(()), ident.travector(names)) => STerm.Result(names.map(Var(_)))
+        case Typed(Ident(name), _)                       => STerm.Result(Vector(varNamed(name)))
+        case Apply(TupleApp(()), ident.travector(names)) => STerm.Result(names.map(varNamed(_)))
 
     val asApplication: Tree =\> PApp =
         case Apply(Apply(_, List(t)), ident.travector(names)) =>
-            App(t, names.map(Var(_)))
+            App(t, names.map(varNamed(_)))
 
     val ident: Term =\> String =
         case Ident(name) => name
@@ -108,8 +94,8 @@ final class MParsing[q <: Quotes & Singleton](using val q: q):
 
     private def fullVector[A] = ({ case Some(a) => a }: Option[A] =\> A).travector
 
-    case class TuplingState(app: Option[PApp] = None, bindings: Vector[Option[Var]] = Vector.empty, arity: Int = 0):
-        def addBinding(index: Int, binding: Var) =
+    case class TuplingState(app: Option[PApp] = None, bindings: Vector[Option[Var[q]]] = Vector.empty, arity: Int = 0):
+        def addBinding(index: Int, binding: Var[q]) =
             val newBindings =
                 if bindings.size > index then bindings.updated(index, Some(binding))
                 else bindings ++ Vector.fill(index - bindings.size)(None) :+ Some(binding)
@@ -127,12 +113,12 @@ final class MParsing[q <: Quotes & Singleton](using val q: q):
     ):
         private def add(mid: PMid) = copy(result = result :+ mid)
 
-        private def updateTupling(v: Var)(f: TuplingState => TuplingState) =
+        private def updateTupling(v: Var[q])(f: TuplingState => TuplingState) =
             f(tuplings.getOrElse(v.name, TuplingState())) match
                 case CompleteTuplingState(mid) => add(mid).copy(tuplings = tuplings - v.name)
                 case tupling                   => copy(tuplings = tuplings.updated(v.name, tupling))
 
-        def push(cmd: STerm[Var, Tree] & (Pos.Mid | Pos.Tupling)): DetupleState = cmd match
+        def push(cmd: STerm[Var[q], Tree] & (Pos.Mid | Pos.Tupling)): DetupleState = cmd match
             case STerm.Tupled(receiver, arity, application) => updateTupling(receiver)(_.define(application, arity))
             case STerm.Untupling(src, tgt, index)           => updateTupling(src)(_.addBinding(index, tgt))
             case term: Pos.Mid                              => add(term)

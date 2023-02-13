@@ -300,14 +300,14 @@ object BinHistory:
     }
 end BinHistory
 
-final type History[+A] = Vector[BinHistory[A]]
+final type Adaptation[+A] = Vector[BinHistory[A]]
 trait EmptyHistory:
-    def history: History[Nothing] = Vector.empty
+    def history: Adaptation[Nothing] = Vector.empty
 
 enum BinRes[+A]:
     case LeafRes[+A](value: A) extends BinRes[A], EmptyHistory
-    case BranchRes(l: BinRes[A], r: BinRes[A], value: A, history: History[A])
-    case FailRes(value: A, history: History[A], last: BinOp)
+    case BranchRes(l: BinRes[A], r: BinRes[A], value: A, history: Adaptation[A])
+    case FailRes(value: A, history: Adaptation[A], last: BinOp)
 
     import BinRes.{FailRes, LeafRes, BranchRes}
     def value: A
@@ -318,7 +318,7 @@ enum BinRes[+A]:
             case BranchRes(l, r, value, history) => f(l, r)
             case FailRes(value, history, last)   => this
 
-    def history: History[A]
+    def history: Adaptation[A]
 
     final def clean: BinRes[A] = this match
         case fail: FailRes[?]     => fail.copy(history = Vector())

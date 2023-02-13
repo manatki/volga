@@ -20,6 +20,7 @@ trait Traverse[F[+_]] extends Functor[F]:
 end Traverse
 
 object Traverse:
+
     inline def derived[F[+_]]: Traverse[F] = new:
         extension [A](fa: F[A])
             def traverse[M[+_]: Monoidal, B](f: A => M[B]): M[F[B]] =
@@ -47,11 +48,13 @@ object Traverse:
                 }
         }
 
-    inline def traverseProduct[A, B, TA <: Tuple, TB <: Tuple, M[+_]](t: TA, f: A => M[B])(using M: Monoidal[M]): M[TB] =
+    inline def traverseProduct[A, B, TA <: Tuple, TB <: Tuple, M[+_]](t: TA, f: A => M[B])(using
+        M: Monoidal[M]
+    ): M[TB] =
         inline t match
-            case _: EmptyTuple   =>
+            case _: EmptyTuple =>
                 M.pure(summonInline[EmptyTuple <:< TB](EmptyTuple))
-            case t: (a *: ta) =>
+            case t: (a *: ta)  =>
                 inline erasedValue[TB] match
                     case _: (b *: tb) =>
                         val mtb: M[tb] = traverseProduct[A, B, ta, tb, M](t.tail, f)
@@ -60,9 +63,9 @@ object Traverse:
 
     inline def traverseSum[A, B, FA, FB, SA, SB, M[+_]: Monoidal](pa: FA, f: A => M[B]): M[FB] =
         inline erasedValue[SA] match
-            case _: EmptyTuple   =>
+            case _: EmptyTuple =>
                 throw IllegalArgumentException(s"can't match $pa")
-            case t: (a *: ta) =>
+            case t: (a *: ta)  =>
                 type Head = a
                 inline erasedValue[SB] match
                     case _: (b *: tb) =>
