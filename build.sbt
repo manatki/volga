@@ -2,7 +2,7 @@ name := "volga"
 
 val publishVersion = "0.2"
 
-val scala3version = "3.3.0-RC2"
+val scala3version = "3.3.0-RC4"
 val scala2version = "2.13.10"
 
 crossScalaVersions := List(scala3version, scala2version)

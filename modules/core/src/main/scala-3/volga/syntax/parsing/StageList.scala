@@ -41,8 +41,8 @@ final case class StageList[+T, +I, +O](input: I, stages: VectorOf[Stage[T, _, I]
                 case Nil => Right((prev, acc))
 
         for
-            initInp            <- start(input)
-            (init, newInput)    = initInp
+            started            <- start(input)
+            (init, newInput)    = started
             traversed          <- go(stages.toList, Vector(), init)
             (preLast, elements) = traversed
             lastOut            <- end(preLast, output)
@@ -50,9 +50,7 @@ final case class StageList[+T, +I, +O](input: I, stages: VectorOf[Stage[T, _, I]
         yield (last, StageList(newInput, VectorOf(elements), newOutput))
     end scanlErr
 
-    def scanl1Err[E, R](f: (Option[T], I, O) => Either[E, R]): Either[E, StageList[T, I, R]] =
-        scanlErr()
-
+    def scanl1Err[E, R](f: (Option[T], I, O) => Either[E, R]): Either[E, StageList[T, I, R]] = ???
     def scanrErr[E, R](f: (Option[T], O, I) => Either[E, R]): Either[E, StageList[T, R, O]] =
         reverse.scanl1Err(f).map(_.reverse)
 
