@@ -68,10 +68,10 @@ object smc:
             def ident  = TypeRepr.of[U[tags.One]]
             def tensor = TypeRepr.of[[a, b] =>> U[tags.Tensor[a, b]]]
 
-        val p = MParsing()
-        val g = MGeneration()
+        val parse = MParsing()
+        val gen = MGeneration()
 
-        import p.*
+        import parse.*
 
         def just[R: Type](expr: Expr[SyApp[H, U] ?=> R]): Expr[H[I, Reconstruct[U, R]]] =
             val t  = expr.asTerm

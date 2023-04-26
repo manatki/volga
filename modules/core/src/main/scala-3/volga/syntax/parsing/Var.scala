@@ -16,7 +16,7 @@ object Var:
     ): Variable[Var[q.type], MndType[q, q.reflect.TypeRepr]] = new:
         type Label = String
 
-        override def label(v: Var[q.type]): Label = ???
+        override def label(v: Var[q.type]): Label = v.name
 
         override def describe(v: Var[q.type]): MndType[q, q.reflect.TypeRepr] = v.mndType
 

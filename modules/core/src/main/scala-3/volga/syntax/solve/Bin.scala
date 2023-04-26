@@ -7,7 +7,7 @@ import volga.syntax.solve.binop.*
 
 import scala.annotation.tailrec
 import scala.collection.Factory
-import volga.util.fold.*
+import volga.util.collections.*
 import volga.functors.Traverse
 
 enum Bin[+A] derives Traverse:

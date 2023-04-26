@@ -10,6 +10,8 @@ trait Traverse[F[+_]] extends Functor[F]:
         def traverse[M[+_], B](f: A => M[B])(using Monoidal[M]): M[F[B]]
         override def map[B](f: A => B): F[B] = traverse[[x] =>> x, B](f)
 
+        def collectLefts[E, B](f: A => Either[E, B]): Either[Vector[E], B] = ???
+
     extension [A, M[+_]](fa: F[M[A]]) def sequence(using Monoidal[M]): M[F[A]] = fa.traverse(x => x)
 
     def composeTraverse[G[+_]: Traverse]: Traverse[[x] =>> F[G[x]]] =

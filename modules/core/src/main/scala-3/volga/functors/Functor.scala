@@ -29,7 +29,7 @@ object Functor:
     inline def derived[F[+_]]: Functor[F] = new:
         extension [A](fa: F[A]) def map[B](f: A => B): F[B] = functorCall[A, B, F[A], F[B]](fa, f)
 
-    export instances.{vectorFunctor, idFunctor, listFunctor}
+    export instances.{vectorFunctor, idFunctor, listFunctor, functionMonad, eitherMonad}
 
     inline def functorCall[A, B, FA, FB](fa: FA, f: A => B): FB =
         summonFrom {

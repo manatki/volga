@@ -6,5 +6,5 @@ final class MGeneration[q <: Quotes & Singleton](using val q: q)(using typing: M
     import q.reflect.*
 
     def generate(terms: StageList.Vars[Tree, Var[q.type]]): Tree =
-        val adaptations = StageList.withAdaptation(terms)
+        // val adaptations = StageList.withAdaptation(terms)
         ???
