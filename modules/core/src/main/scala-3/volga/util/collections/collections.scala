@@ -38,6 +38,20 @@ extension [A, T[x] <: IterableOnce[x]](xs: T[A])
         (acc, builder.result())
     end mapAccumulate
 
+    def mapAccumulateErr[B, C, E](b: B)(f: (B, A) => Either[E, (B, C)])(using T: Factory[C, T[C]]): Either[E, (B, T[C])] =
+        val builder = T.newBuilder
+        var it     = xs.iterator
+        def go(acc: B): Either[E, (B, T[C])] =
+            if it.hasNext then
+                f(acc, it.next()) match
+                    case Left(e)        => Left(e)
+                    case Right((acc1, c)) =>
+                        builder += c
+                        go(acc1)
+            else Right((acc, builder.result()))
+        go(b)
+    end mapAccumulateErr
+
     def mapErr[E, B](f: A => Either[E, B])(using T: Factory[B, T[B]]): Either[E, T[B]] =
         val builder               = T.newBuilder
         val xit                   = xs.iterator
