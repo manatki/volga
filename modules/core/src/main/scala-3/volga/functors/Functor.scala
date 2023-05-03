@@ -19,7 +19,7 @@ trait Functor[F[+_]]:
 
     extension [A](fa: F[A]) def map[B](f: A => B): F[B]
 
-    def composeFunctor[G[+_]: Functor]: Functor[[x] =>> F[G[x]]] = new:
+    given composeFunctor[G[+_]: Functor]: Functor[[x] =>> F[G[x]]] with
         extension [A](fga: F[G[A]]) def map[B](f: A => B): F[G[B]] = self.map(fga)(_.map(f))
 
 end Functor

@@ -2,6 +2,7 @@ package volga.functors
 
 import scala.util.control.TailCalls.TailRec
 import scala.annotation.tailrec
+import scala.reflect.ManifestFactory.NothingManifest
 
 trait StateCont[S, -E1, -A1, +E2, +A2]:
     self =>
@@ -18,13 +19,13 @@ sealed trait Result[+E, +A]:
         case State.Error(err)   => Left(err)
 
 enum State[S, +E, +A]:
-    case Modify(f: S => (S, A))
-    case Success[S, +A](res: A) extends State[S, Nothing, A], Result[Nothing, A]
-    case Error[S, +E](err: E)   extends State[S, E, Nothing], Result[E, Nothing]
+    case Modify[S, A](f: S => (S, A)) extends State[S, Nothing, A]
+    case Success[S, +A](res: A)       extends State[S, Nothing, A], Result[Nothing, A]
+    case Error[S, +E](err: E)         extends State[S, E, Nothing], Result[E, Nothing]
     case Bind[S, E1, A1, +E2, +A2](
         cur: State[S, E1, A1],
         cont: StateCont[S, E1, A1, E2, A2]
-    )                           extends State[S, E2, A2]
+    )                                 extends State[S, E2, A2]
 
     def flatMap[E1, A1](f: A => State[S, E1, A1]): State[S, E | E1, A1] = Bind(
       this,
@@ -59,6 +60,10 @@ end State
 object State:
     def update[S](f: S => S): State[S, Nothing, Unit] = Modify(s => (f(s), ()))
 
+    def fromEither[S, E, A](either: Either[E, A]): State[S, E, A] = either match
+        case Left(err)  => Error(err)
+        case Right(res) => Success(res)
+
     given [S, E]: Monad[State[S, E, _]] with
         def pure[A](x: A)                                                        = Success(x)
         extension [A](sa: State[S, E, A]) def flatMap[B](f: A => State[S, E, B]) = sa.flatMap(f)
@@ -73,3 +78,4 @@ end State
             println(s"state = $s, sum = ${bs.sum}")
             println("Hello")
         case _                      =>
+end foooo

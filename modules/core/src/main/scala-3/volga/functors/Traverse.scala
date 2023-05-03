@@ -10,15 +10,26 @@ trait Traverse[F[+_]] extends Functor[F]:
         def traverse[M[+_], B](f: A => M[B])(using Monoidal[M]): M[F[B]]
         override def map[B](f: A => B): F[B] = traverse[[x] =>> x, B](f)
 
-        def collectLefts[E, B](f: A => Either[E, B]): Either[Vector[E], B] = ???
+        def mapAccumErr[B, C, E](b: B)(f: (B, A) => Either[E, (B, C)]): Either[E, (B, F[C])] =
+            def mod(b: B, a: A): (B, State[B, E, C]) = f(b, a) match
+                case Left(e)        => (b, State.Error(e))
+                case Right((b1, c)) => (b1, State.Success(c))
+
+            def from(a: A) = State.Modify(mod(_, a)).flatten
+
+            traverse(from).run(b) match
+                case (b, State.Success(c)) => Right((b, c))
+                case (b, State.Error(e))   => Left(e)
+
+        end mapAccumErr
+    end extension
 
     extension [A, M[+_]](fa: F[M[A]]) def sequence(using Monoidal[M]): M[F[A]] = fa.traverse(x => x)
 
-    def composeTraverse[G[+_]: Traverse]: Traverse[[x] =>> F[G[x]]] =
-        new:
-            extension [A](fga: F[G[A]])
-                def traverse[M[+_], B](f: A => M[B])(using Monoidal[M]): M[F[G[B]]] =
-                    self.traverse(fga)(_.traverse(f))
+    given composeTraverse[G[+_]: Traverse]: Traverse[[x] =>> F[G[x]]] with
+        extension [A](fga: F[G[A]])
+            def traverse[M[+_], B](f: A => M[B])(using Monoidal[M]): M[F[G[B]]] =
+                self.traverse(fga)(_.traverse(f))
 end Traverse
 
 object Traverse:

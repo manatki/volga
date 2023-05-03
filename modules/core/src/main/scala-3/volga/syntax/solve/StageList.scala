@@ -1,4 +1,5 @@
-package volga.syntax.parsing
+package volga.syntax.solve
+import volga.syntax.parsing.{Pos, STerm, Variable, Labeled}
 
 import volga.syntax.solve.Bin
 import volga.syntax.solve.PMagma
@@ -17,6 +18,10 @@ object StageList:
     import Pos.*
     import STerm.*
 
+    def apply[X](xs: Vector[X]): StageList[X] = xs
+
+    opaque type StageList[+X] <: Vector[X] = Vector[X]
+
     case class VarList[+V, +T](prev: Vector[V], next: Vector[V], binding: Option[T])
     final case class Align[+V, +T](prev: Vector[V], next: Vector[V], goThrough: Vector[V], binding: Option[T])
     final case class Out[+V, +T, +R](
@@ -31,9 +36,9 @@ object StageList:
         case UnknownVar(v: V, t: Option[T])
         case Other(message: String, term: Option[T])
 
-    type Vars[+V, +T]     = Vector[VarList[V, T]]
-    type Aligned[+V, +T]  = Vector[Align[V, T]]
-    type Adapted[V, T, R] = Vector[Out[V, T, R]]
+    type Vars[+V, +T]     = StageList[VarList[V, T]]
+    type Aligned[+V, +T]  = StageList[Align[V, T]]
+    type Adapted[V, T, R] = StageList[Out[V, T, R]]
 
     private def toStage[S, T](prev: Vector[S], term: STerm[S, T] & Mid): (Vector[S], VarList[S, T]) =
         term match
@@ -75,12 +80,7 @@ object StageList:
           adaptation => Right(Out(align.prev, align.next, align.goThrough, adaptation, align.binding))
         )
 
-    extension [T, V](list: Vars[V, T])
-        def withAdaptation[D](using V: Variable[V, D]): Either[Err[V, T], Adapted[V, T, D]] =
-            for
-                aligned <- doAlign(list)
-                adapted <- aligned.mapErr(histWithOp)
-            yield adapted
+    end histWithOp
 
     private def doAlign[T, V](vars: Vars[V, T])(using V: Labeled[V]): Either[Err[V, T], Aligned[V, T]] =
         vars.mapAccumulateErr(Map.empty[V.Label, V]) { case (acc, VarList(prev, next, bind)) =>
@@ -91,5 +91,12 @@ object StageList:
                 Right((remains, Align(prev, next, remains.values.toVector, bind)))
             else Left(Err.UnknownVar(unknown.values.head, bind))
         }.map(_._2)
+
+    extension [T, V](list: Vars[V, T])
+        def withAdaptation[D](using V: Variable[V, D]): Either[Err[V, T], Adapted[V, T, D]] =
+            for
+                aligned <- doAlign(list)
+                adapted <- aligned.mapErr(histWithOp)
+            yield adapted
 
 end StageList

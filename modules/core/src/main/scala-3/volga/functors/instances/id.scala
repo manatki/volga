@@ -5,6 +5,8 @@ import scala.annotation.tailrec
 
 given idFunctor: TraverseMonad[[x] =>> x] with
     def pure[A](x: A): A = x
+
+    override def rightAssoc: Boolean = false
     extension [A](a: A)
         override def map[B](f: A => B): B                = f(a)
         override def map2[B, C](b: => B)(f: (A, B) => C) = f(a, b)

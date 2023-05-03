@@ -14,6 +14,8 @@ trait Monad[F[+_]] extends Monoidal[F]:
         override def >>[B](fb: => F[B])                            = fa.flatMap(_ => fb)
         override def map[B](f: A => B)                             = fa.flatMap(a => pure(f(a)))
 
+        def flatten[B](using ev: A <:< F[B]): F[B] = fa.flatMap(ev)
+
     end extension
     def recursion[A, B](a: A)(f: A => F[Either[A, B]]): F[B] =
         f(a).flatMap {
