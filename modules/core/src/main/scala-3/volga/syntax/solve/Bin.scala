@@ -62,14 +62,14 @@ enum Bin[+A] derives Traverse:
     def zipper = BinZipper(this)
 
     def adaptation[A1 >: A](bin: Bin[A1]): Either[String, Vector[BinOp]] =
-        Permutations.buildPerm(elems, bin.elems).left.map(_.mkString(",")).flatMap { perm =>
-            Permutations
-                .swaps(perm)
-                .foldErr(zipper.normalize) { case (z, (i, j)) =>
-                    z.swapElems(i, j).toRight[String](s"Bad state while swapping $i <-> $j")
-                }
-                .map(_.history ++ bin.zipper.normalize.history.invertAll)
-        }
+        for
+            perm        <- Permutations.buildPerm(elems, bin.elems).left.map(_.mkString(","))
+            swaps        = Permutations.swaps(perm)
+            transformed <- swaps.foldErr(zipper.normalize) { case (z, (i, j)) =>
+                               z.swapElems(i, j).toRight[String](s"Bad state while swapping $i <-> $j")
+                           }
+            full         = transformed.history ++ bin.zipper.normalize.history.invertAll
+        yield full.optimize
 
     override def toString = this.match
         case Leaf(a)      => a.toString
