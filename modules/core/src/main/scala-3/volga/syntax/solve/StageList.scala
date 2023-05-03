@@ -28,8 +28,8 @@ object StageList:
         prev: Vector[V],
         next: Vector[V],
         goThrough: Vector[V],
-        adaptation: Adaptation[R],
-        binding: Option[T]
+        adaptation: Adaptation[R] = Vector.empty,
+        binding: Option[T] = None
     )
 
     enum Err[+V, +T]:
@@ -59,7 +59,7 @@ object StageList:
     end fromTerms
 
     private def vectorAsBinTree[S](names: Vector[S]): Bin[S] =
-        names.foldRight[Bin[S]](Bin.Bud)((x, t) => Bin.Branch(Bin.Leaf(x), t))
+        names.view.map(Bin.Leaf.apply).reduceRight(Bin.Branch.apply)
 
     private def history[V, T, D](align: Align[V, T])(using
         V: Variable[V, D]
@@ -83,12 +83,12 @@ object StageList:
     end histWithOp
 
     private def doAlign[T, V](vars: Vars[V, T])(using V: Labeled[V]): Either[Err[V, T], Aligned[V, T]] =
-        vars.mapAccumulateErr(Map.empty[V.Label, V]) { case (acc, VarList(prev, next, bind)) =>
-            val full    = acc ++ V.toMap(prev)
+        vars.mapAccumulateErr(Vector.empty[V]) { case (preserved, VarList(prev, next, bind)) =>
+            val full    = V.toMap(preserved) ++ V.toMap(prev)
             val unknown = V.toMap(next) -- full.keys
             if unknown.isEmpty then
-                val remains = full -- next.view.map(V.label)
-                Right((remains, Align(prev, next, remains.values.toVector, bind)))
+                val keep = (full -- next.view.map(V.label)).values.toVector
+                Right((keep, Align(prev ++ preserved, next, keep, bind)))
             else Left(Err.UnknownVar(unknown.values.head, bind))
         }.map(_._2)
 

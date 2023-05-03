@@ -11,7 +11,7 @@ extension [A](xs: IterableOnce[A])
                 f(acc, i.next()) match
                     case l: Left[?, ?] => l
                     case Right(b1)     => go(b1)
-            else Right(b)
+            else Right(acc)
         go(b)
 
     def foldOpt[B, E](b: B)(f: (B, A) => Option[B]): Option[B] =
