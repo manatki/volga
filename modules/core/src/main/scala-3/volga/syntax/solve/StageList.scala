@@ -44,6 +44,11 @@ object StageList:
         case UnusedVar(v: V)
         case Other(message: String, term: Option[T])
 
+        override def getMessage = this match
+            case UnknownVar(v, t) => s"unknown variable $v in $t"
+            case UnusedVar(v)     => s"unused variable $v"
+            case Other(m, t)      => s"$m in $t"
+
     type Vars[+V, +T]     = StageList[Basic[V, T]]
     type Aligned[+V, +T]  = StageList[Align[V, T]]
     type Adapted[V, T, R] = StageList[Adapt[V, T, R]]

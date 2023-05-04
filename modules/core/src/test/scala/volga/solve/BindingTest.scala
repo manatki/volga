@@ -12,6 +12,11 @@ import scala.annotation.tailrec
 class BindingTest extends munit.FunSuite:
 
     class mid(val inputs: String*)(val op: String)(val results: String*)
+    def mid1(inputs: String*)(results: String*): mid =
+        val is = inputs.mkString("[", ", ", "]")
+        val os = results.mkString("[", ", ", "]")
+        mid(inputs*)(s"$is -> $os")(results*)
+
     class syntax(inputs: String*)(mids: mid*)(output: String*):
         def pairs =
             val ins  = inputs +: mids.map(_.results)
@@ -62,6 +67,7 @@ class BindingTest extends munit.FunSuite:
             this
 
         def error = result.left.get
+
     end syntax
 
     test("identity adaptation"):
@@ -107,6 +113,83 @@ class BindingTest extends munit.FunSuite:
               Adapt(VarList(Vector("c"), Vector("a")), VarList(Vector("a", "c"), Vector()))
             )
 
-    // test("go through swap"):
+    test("go through swap"):
+        syntax("a", "b", "c")(
+          mid("c", "a")("[c, a] -> [d, e]")("d", "e")
+        )("b", "e", "d")
+            .checkAdaptations()
+            .checkList(noHistory = true)(
+              Adapt(
+                VarList(Vector("a", "b", "c"), Vector()),
+                VarList(Vector("c", "a"), Vector("b")),
+                binding = Some("[c, a] -> [d, e]")
+              ),
+              Adapt(VarList(Vector("d", "e"), Vector("b")), VarList(Vector("b", "e", "d"), Vector()))
+            )
+
+    test("to through 2 levels"):
+        syntax("a", "b", "c")(
+          mid("c")("[c] -> [d, e]")("d", "e"),
+          mid("e", "a")("[e, a] -> [f, g, h]")("f", "g", "h")
+        )("b", "g", "f", "d", "h")
+            .checkAdaptations()
+            .checkList(noHistory = true)(
+              Adapt(
+                VarList(Vector("a", "b", "c"), Vector()),
+                VarList(Vector("c"), Vector("a", "b")),
+                binding = Some("[c] -> [d, e]")
+              ),
+              Adapt(
+                VarList(Vector("d", "e"), Vector("a", "b")),
+                VarList(Vector("e", "a"), Vector("b", "d")),
+                binding = Some("[e, a] -> [f, g, h]")
+              ),
+              Adapt(
+                VarList(Vector("f", "g", "h"), Vector("b", "d")),
+                VarList(Vector("b", "g", "f", "d", "h"), Vector())
+              )
+            )
+
+    test("to through many levels"):
+        syntax()(
+          mid1()("a", "b", "c"),
+          mid1("c")("d", "e"),
+          mid1("d")(),
+          mid1()("x", "y"),
+          mid1("e", "a")("f", "g", "h"),
+          mid1("b", "h")(),
+          mid1("x", "g")(),
+          mid1("f", "y")("z")
+        )("z").checkAdaptations()
+
+    test("to through many levelsv unused"):
+        assertEquals(
+          syntax()(
+            mid1()("a", "b", "c"),
+            mid1("c")("d", "e"),
+            mid1("d")(),
+            mid1()("x", "y"),
+            mid1("e", "a")("f", "g", "h"),
+            mid1("b")(),
+            mid1("x", "g")(),
+            mid1("f", "y")("z")
+          )("z").error,
+          StageList.Err.UnusedVar("h")
+        )
+
+    test("to through many levels unknown"):
+        assertEquals(
+            syntax()(
+            mid1()("b", "c"),
+            mid1("c")("d", "e"),
+            mid1("d")(),
+            mid1()("x", "y"),
+            mid1("e", "a")("f", "g", "h"),
+            mid1("b", "h")(),
+            mid1("x", "g")(),
+            mid1("f", "y")("z")
+            )("z").error,
+            StageList.Err.UnknownVar("a", Some("[e, a] -> [f, g, h]"))
+        )
 
 end BindingTest
