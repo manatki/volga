@@ -81,13 +81,16 @@ object Functor:
     object HeadMatch:
 
         transparent trait Primary
-        given [A, B]: HeadMatch[A, B, A, B] with Primary with
+        given here[A, B]: HeadMatch[A, B, A, B] with Primary with
             def apply(a: A)(f: A => B) = f(a)
-        given [A, B, X]: HeadMatch[X, X, A, B] with
+        given ignore[A, B, X]: HeadMatch[X, X, A, B] with
             def apply(x: X)(f: A => B): X = x
 
-        given [A, B, F[+_]: Functor]: HeadMatch[F[A], F[B], A, B] with
+        given single[A, B, F[+_]: Functor]: HeadMatch[F[A], F[B], A, B] with
             def apply(a: F[A])(f: A => B) = a.map(f)
+
+        given double[A, B, F[+_]: Functor, G[+_]: Functor]: HeadMatch[F[G[A]], F[G[B]], A, B] with
+            def apply(a: F[G[A]])(f: A => B) = a.map(_.map(f))
     end HeadMatch
 
 end Functor

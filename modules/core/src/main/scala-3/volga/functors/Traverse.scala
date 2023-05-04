@@ -95,14 +95,17 @@ object Traverse:
     object HeadMatch:
         transparent trait Primary
 
-        given [A, B, M[+_]]: HeadMatch[A, B, A, B, M] with Primary with
+        given here[A, B, M[+_]]: HeadMatch[A, B, A, B, M] with Primary with
             def apply(a: A)(f: A => M[B])(using Monoidal[M]) = f(a)
 
-        given [A, B, X, M[+_]]: HeadMatch[X, X, A, B, M] with
+        given ignore[A, B, X, M[+_]]: HeadMatch[X, X, A, B, M] with
             def apply(x: X)(f: A => M[B])(using M: Monoidal[M]): M[X] = M.pure(x)
 
-        given [A, B, F[+_]: Traverse, M[+_]]: HeadMatch[F[A], F[B], A, B, M] with
+        given single[A, B, F[+_]: Traverse, M[+_]]: HeadMatch[F[A], F[B], A, B, M] with
             def apply(a: F[A])(f: A => M[B])(using Monoidal[M]) = a.traverse(f)
+
+        given double[A, B, F[+_]: Traverse, G[+_]: Traverse, M[+_]]: HeadMatch[F[G[A]], F[G[B]], A, B, M] with
+            def apply(a: F[G[A]])(f: A => M[B])(using Monoidal[M]) = a.traverse(_.traverse(f))
     end HeadMatch
 
 end Traverse

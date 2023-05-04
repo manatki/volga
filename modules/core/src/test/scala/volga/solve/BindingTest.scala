@@ -4,11 +4,18 @@ import volga.syntax.solve.StageList
 import volga.syntax.parsing.{STerm, App}
 import volga.syntax.solve.StageList.Out
 import volga.syntax.solve.BinHistory as BH
+import scala.annotation.threadUnsafe
+import volga.syntax.solve.Bin
 
 class BindingTest extends munit.FunSuite:
     class mid(val inputs: String*)(val op: String)(val results: String*)
     class syntax(inputs: String*)(mids: mid*)(output: String*):
-        def result = StageList
+        def pairs =
+            val ins  = inputs +: mids.map(_.results)
+            val outs = mids.map(_.inputs) :+ output
+            ins.lazyZip(outs)
+
+        @threadUnsafe lazy val result = StageList
             .fromTerms(
               inputs.toVector,
               mids.view
@@ -22,6 +29,15 @@ class BindingTest extends munit.FunSuite:
               STerm.Result(output.toVector)
             )
             .withAdaptation
+
+        def checkAdaptations(): this.type =
+            for (in, out, elem) <- pairs.lazyZip(list)
+            do
+                assertEquals(
+                  Bin.fromElements(in).modAll(elem.adaptation.map(_.op)),
+                  Right(Bin.fromElements(out))
+                )
+            this
 
         def list = result.right.get.toVector
 
@@ -44,11 +60,15 @@ class BindingTest extends munit.FunSuite:
               Out(Vector("a", "b"), Vector("b", "a"), Vector(), history1),
         )
 
-    // test("complex swap"):
-    //     assertEquals(
-    //       syntax("a", "b", "c")()("b", "c", "a").list,
-    //       Vector:
-    //           Out(Vector("a", "b", "c"), Vector("b", "c", "a"), Vector()),
-    //     )
+    test("complex swap"):
+        val history1 = Vector:
+            BH.HSwap("a", "b")
+        assertEquals(
+          syntax("a", "b", "c")()("b", "c", "a")
+              .checkAdaptations()
+              .listNoHistory,
+          Vector:
+              Out(Vector("a", "b", "c"), Vector("b", "c", "a"), Vector()),
+        )
 
 end BindingTest

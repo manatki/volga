@@ -9,6 +9,7 @@ import scala.annotation.tailrec
 import scala.collection.Factory
 import volga.util.collections.*
 import volga.functors.Traverse
+import volga.functors.Functor
 
 enum Bin[+A] derives Traverse:
     case Branch(l: Bin[A], r: Bin[A])
@@ -95,6 +96,11 @@ object Bin:
         def apply(s: Side) = s match
             case L => b.l
             case R => b.r
+
+    def fromElements[A](xs: Iterable[A]): Bin[A] =
+        if xs.isEmpty then Bud
+        else xs.view.map(Leaf(_)).reduceRight(Branch(_, _))
+end Bin
 
 package binop:
     sealed trait Index
@@ -278,27 +284,23 @@ final case class BinZipper[+A](
             )
 end BinZipper
 
-enum BinHistory[+A]:
+enum BinHistory[+A] derives Traverse:
     case HRotate(side: Side, l: A, m: A, r: A)
     case HSwap(l: A, r: A)
     case HSplit(left: HChain[A], right: HChain[A])
     case HConsume(side: Side, v: A)
     case HGrow(side: Side, v: A)
 
-    final def map[B](f: A => B): BinHistory[B] = this match
-        case HRotate(side, l, m, r) => HRotate(side, f(l), f(m), f(r))
-        case HSwap(l, r)            => HSwap(f(l), f(r))
-        case HSplit(ls, rs)         => HSplit(ls.map(f), rs.map(f))
-        case HConsume(side, v)      => HConsume(side, f(v))
-        case HGrow(side, v)         => HGrow(side, f(v))
+    final def op: BinOp = this match
+        case HRotate(side, _, _, _) => Rotate(side)
+        case HSwap(_, _)            => Swap
+        case HSplit(l, r)           => Split(l.history.map(_.op), r.history.map(_.op))
+        case HConsume(side, _)      => Consume(side)
+        case HGrow(side, _)         => Grow(side)
 end BinHistory
 
 object BinHistory:
-
-    final case class HChain[+A](start: A, end: A, history: Vector[BinHistory[A]]) {
-        def map[B](f: A => B): HChain[B] = HChain(f(start), f(end), history.map(_.map(f)))
-    }
-end BinHistory
+    final case class HChain[+A](start: A, end: A, history: Vector[BinHistory[A]]) derives Traverse
 
 final type Adaptation[+A] = Vector[BinHistory[A]]
 trait EmptyHistory:

@@ -13,6 +13,7 @@ import volga.functors.Monoidal
 import scala.language.implicitConversions
 import volga.syntax.solve.BinOp
 import volga.util.collections.*
+import volga.syntax.parsing.Var
 
 object StageList:
     import Pos.*
@@ -34,6 +35,7 @@ object StageList:
 
     enum Err[+V, +T]:
         case UnknownVar(v: V, t: Option[T])
+        case UnusedVar(v: V)
         case Other(message: String, term: Option[T])
 
     type Vars[+V, +T]     = StageList[VarList[V, T]]
@@ -58,14 +60,11 @@ object StageList:
                 stages :+ lastStage :+ VarList(lastestInput, Vector(), None)
     end fromTerms
 
-    private def vectorAsBinTree[S](names: Vector[S]): Bin[S] =
-        names.view.map(Bin.Leaf.apply).reduceRight(Bin.Branch.apply)
-
     private def history[V, T, D](align: Align[V, T])(using
         V: Variable[V, D]
     ): Either[String, Adaptation[D]] =
-        val inputBinTree  = vectorAsBinTree(align.prev)
-        val outputBinTree = vectorAsBinTree(align.next)
+        val inputBinTree  = Bin.fromElements(align.prev)
+        val outputBinTree = Bin.fromElements(align.next)
         val inputMarks    = inputBinTree.map(V.label)
         import V.describeMagma
         for perms <- inputMarks.adaptation(outputBinTree.map(V.label))
@@ -82,15 +81,24 @@ object StageList:
 
     end histWithOp
 
-    private def doAlign[T, V](vars: Vars[V, T])(using V: Labeled[V]): Either[Err[V, T], Aligned[V, T]] =
-        vars.mapAccumulateErr(Vector.empty[V]) { case (preserved, VarList(prev, next, bind)) =>
-            val full    = V.toMap(preserved) ++ V.toMap(prev)
-            val unknown = V.toMap(next) -- full.keys
-            if unknown.isEmpty then
-                val keep = (full -- next.view.map(V.label)).values.toVector
-                Right((keep, Align(prev ++ preserved, next, keep, bind)))
-            else Left(Err.UnknownVar(unknown.values.head, bind))
-        }.map(_._2)
+    private def alignSingle[V, T](preserved: Vector[V], list: VarList[V, T])(using
+        V: Labeled[V]
+    ): Either[Err[V, T], (Vector[V], Align[V, T])] =
+        val VarList(prev, next, bind) = list
+        val full                      = V.toMap(preserved) ++ V.toMap(prev)
+        val unknown                   = V.toMap(next) -- full.keys
+        if unknown.isEmpty then
+            val keep = (full -- next.view.map(V.label)).values.toVector
+            Right((keep, Align(prev ++ preserved, next, keep, bind)))
+        else Left(Err.UnknownVar(unknown.values.head, bind))
+    end alignSingle
+
+    private def doAlign[V, T](vars: Vars[V, T])(using V: Labeled[V]): Either[Err[V, T], Aligned[V, T]] =
+        for
+            alignRes         <- vars.mapAccumulateErr(Vector.empty)(alignSingle[V, T])
+            (result, aligned) = alignRes
+            _                <- Either.cond(result.isEmpty, (), Err.UnusedVar(result.head))
+        yield aligned
 
     extension [T, V](list: Vars[V, T])
         def withAdaptation[D](using V: Variable[V, D]): Either[Err[V, T], Adapted[V, T, D]] =
