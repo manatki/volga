@@ -2,12 +2,15 @@ package volga.solve
 
 import volga.syntax.solve.StageList
 import volga.syntax.parsing.{STerm, App}
-import volga.syntax.solve.StageList.Out
+import volga.syntax.solve.StageList.{Basic, Adapt, VarList}
 import volga.syntax.solve.BinHistory as BH
 import scala.annotation.threadUnsafe
 import volga.syntax.solve.Bin
+import volga.syntax.parsing.Var
+import scala.annotation.tailrec
 
 class BindingTest extends munit.FunSuite:
+
     class mid(val inputs: String*)(val op: String)(val results: String*)
     class syntax(inputs: String*)(mids: mid*)(output: String*):
         def pairs =
@@ -31,44 +34,79 @@ class BindingTest extends munit.FunSuite:
             .withAdaptation
 
         def checkAdaptations(): this.type =
-            for (in, out, elem) <- pairs.lazyZip(list)
-            do
-                assertEquals(
-                  Bin.fromElements(in).modAll(elem.adaptation.map(_.op)),
-                  Right(Bin.fromElements(out))
-                )
+            val it                                         = pairs.lazyZip(list).iterator
+            @tailrec def go(remains: Vector[String]): Unit = if it.hasNext then
+                val (in, out, elem)   = it.next()
+                val inBinEff          = Bin.fromElements(in)
+                val remBin            = Bin.fromElements(remains)
+                val inBin             = if remains.isEmpty then inBinEff else Bin.Branch(inBinEff, remBin)
+                val outBinRes         = inBin.modAll(elem.adaptation.map(_.op))
+                val outBin            = outBinRes.fold((throw _), identity)
+                val (outBinEff, keep) = outBin match
+                    case _ if elem.next.goThrough.isEmpty => (outBin, Vector())
+                    case Bin.Branch(eff, keep)            => (eff, keep.elems)
+                    case _                                => throw RuntimeException(s"expecting branch but out is $outBin")
+                assertEquals(outBinEff.elems, out)
+                go(keep)
+            else if remains.nonEmpty then throw RuntimeException(s"something remains $remains")
+            go(Vector())
             this
+        end checkAdaptations
 
-        def list = result.right.get.toVector
+        def list = result.fold((throw _), _.toVector)
 
         def listNoHistory = result.right.get.toVector.map(_.copy(adaptation = Vector()))
+
+        def checkList(noHistory: Boolean)(adapts: Adapt[String, String, Any]*): this.type =
+            assertEquals(if noHistory then listNoHistory else list, adapts.toVector)
+            this
+
+        def error = result.left.get
     end syntax
 
     test("identity adaptation"):
-        assertEquals(
-          syntax("a")()("a").list,
-          Vector:
-              Out(Vector("a"), Vector("a"), Vector()),
+        syntax("a")()("a").checkList(noHistory = false)(
+          Adapt(VarList(Vector("a"), Vector()), VarList(Vector("a"), Vector()), Vector())
         )
 
     test("swap"):
-        val history1 = Vector:
-            BH.HSwap("a", "b")
-        assertEquals(
-          syntax("a", "b")()("b", "a").list,
-          Vector:
-              Out(Vector("a", "b"), Vector("b", "a"), Vector(), history1),
+        syntax("a", "b")()("b", "a").checkList(noHistory = false)(
+          Adapt(
+            VarList(Vector("a", "b"), Vector()),
+            VarList(Vector("b", "a"), Vector()),
+            adaptation = Vector(BH.HSwap("a", "b"))
+          )
         )
 
     test("complex swap"):
-        val history1 = Vector:
-            BH.HSwap("a", "b")
+        syntax("a", "b", "c")()("b", "c", "a")
+            .checkAdaptations()
+            .checkList(noHistory = true)(
+              Adapt(VarList(Vector("a", "b", "c"), Vector()), VarList(Vector("b", "c", "a"), Vector()))
+            )
+
+    test("unknown"):
         assertEquals(
-          syntax("a", "b", "c")()("b", "c", "a")
-              .checkAdaptations()
-              .listNoHistory,
-          Vector:
-              Out(Vector("a", "b", "c"), Vector("b", "c", "a"), Vector()),
+          syntax("a")()("b").error,
+          StageList.Err.UnknownVar("b", None)
         )
+
+    test("unused"):
+        assertEquals(
+          syntax("a", "b")()("b").error,
+          StageList.Err.UnusedVar("a")
+        )
+
+    test("go through"):
+        syntax("a", "b")(
+          mid("b")("use-b")("c")
+        )("a", "c")
+            .checkAdaptations()
+            .checkList(noHistory = true)(
+              Adapt(VarList(Vector("a", "b"), Vector()), VarList(Vector("b"), Vector("a")), binding = Some("use-b")),
+              Adapt(VarList(Vector("c"), Vector("a")), VarList(Vector("a", "c"), Vector()))
+            )
+
+    // test("go through swap"):
 
 end BindingTest

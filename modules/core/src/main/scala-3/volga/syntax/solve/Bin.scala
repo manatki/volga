@@ -62,7 +62,7 @@ enum Bin[+A] derives Traverse:
 
     def zipper = BinZipper(this)
 
-    def adaptation[A1 >: A](bin: Bin[A1]): Either[String, Vector[BinOp]] =
+    def adaptation[A1](bin: Bin[A1]): Either[String, Vector[BinOp]] =
         for
             perm        <- Permutations.buildPerm(elems, bin.elems).left.map(_.mkString(","))
             swaps        = Permutations.swaps(perm)
@@ -100,6 +100,7 @@ object Bin:
     def fromElements[A](xs: Iterable[A]): Bin[A] =
         if xs.isEmpty then Bud
         else xs.view.map(Leaf(_)).reduceRight(Branch(_, _))
+
 end Bin
 
 package binop:
@@ -166,11 +167,10 @@ object BinOp:
     def Stop(binOp: BinOp*)     = Exchange(false, binOp.toVector)
     def Continue(binOp: BinOp*) = Exchange(true, binOp.toVector)
 
-    final case class Error(op: BinOp, tree: Bin[Any], path: List[Index] = Nil) {
+    final case class Error(op: BinOp, tree: Bin[Any], path: List[Index] = Nil) extends Throwable:
         def ::(i: Index): Error         = copy(path = i :: path)
-        def ~(bin: Bin[Any]): Error     = copy(tree = bin)
         override def toString(): String = s"error $op : ${path.mkString("-")}"
-    }
+
 end BinOp
 
 final case class BinZipper[+A](
