@@ -2,7 +2,7 @@ name := "volga"
 
 val publishVersion = "0.2"
 
-val scala3version = "3.2.2"
+val scala3version = "3.3.0-RC4"
 val scala2version = "2.13.10"
 
 crossScalaVersions := List(scala3version, scala2version)
@@ -48,7 +48,13 @@ val publishSettings = List(
 val commonSettings = Vector(
   scalaVersion       := scala3version,
   crossScalaVersions := List(scala3version),
-  scalacOptions ++= Vector("-source", "future", "-Ykind-projector:underscores", "-Yshow-suppressed-errors")
+  scalacOptions ++= Vector(
+    // "-source",
+    // "future",
+    "-Ykind-projector:underscores",
+    "-Yshow-suppressed-errors",
+    "-Yexplicit-nulls"
+  )
 )
 
 lazy val core = project
@@ -56,7 +62,7 @@ lazy val core = project
     .settings(
       commonSettings,
       libraryDependencies += "net.sourceforge.plantuml" % "plantuml" % "1.2022.14" % Test,
-      libraryDependencies += "org.scalameta"           %% "munit"    % "0.7.29"    % Test
+      libraryDependencies += "org.scalameta"           %% "munit"    % "1.0.0-M7"    % Test
     )
 
 lazy val prob = project.in(modules / "prob").settings(commonSettings).dependsOn(core)
@@ -88,8 +94,7 @@ val oldSettings = Vector(
         "-language:higherKinds",
         "-language:postfixOps",
         "-deprecation",
-        "-Ymacro-annotations",
-        "-Yexplicit-nulls",
+        "-Ymacro-annotations"
       ),
   publish / skip     := true
 )

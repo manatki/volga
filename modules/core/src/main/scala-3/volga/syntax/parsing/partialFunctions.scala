@@ -1,4 +1,4 @@
-package volga.syntax.internal
+package volga.syntax.parsing
 
 extension [A, B](pf: PartialFunction[A, B])
     def travector: PartialFunction[Iterable[A], Vector[B]] =

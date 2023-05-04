@@ -1,6 +1,7 @@
-package volga.syntax.internal
+package volga.syntax.parsing
 
 import scala.quoted.{Quotes, Expr}
+// import scala.language.`3.2`
 
 trait VError:
     def report(): Unit
@@ -38,10 +39,14 @@ object VError:
         val elems              = Vector.newBuilder[B]
         xs.foreach {
             case f(elem) => if err == null then elems += elem
-            case x       => if err == null then err = mkErr(x) else err ++= mkErr(x) 
+            case x       => 
+                val e = err
+                err = if e != null then e ++ mkErr(x) else mkErr(x)
         }
- 
-        if err == null then Right(elems.result()) else Left(err)
+        err match
+            case null      => Right(elems.result())
+            case e: VError => Left(e)
+
     end traverse
 
 end VError

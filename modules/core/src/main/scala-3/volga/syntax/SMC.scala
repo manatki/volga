@@ -7,13 +7,13 @@ import volga.{Aliases, SymmetricCat}
 import scala.quoted.Quotes
 import scala.quoted.Expr
 import scala.quoted.Type
-import volga.syntax.internal.{STerm, Pos, MParsing}
+import volga.syntax.parsing.{Pos, MParsing, MGeneration, MonadicTyping}
+import volga.syntax.parsing.STerm
 import scala.quoted.ToExpr.SetToExpr
 import scala.{PartialFunction as =\>}
-import com.azul.crs.client.Result
 import scala.collection.View.Empty
 import free.Nat
-import volga.syntax.internal.VError
+import volga.syntax.parsing.VError
 import scala.util.chaining.given
 
 object smc:
@@ -62,10 +62,16 @@ object smc:
 
     class SMCMacro[H[_, _], U[_]](syn: Expr[Syntax[H, U]])(using val q: Quotes)(using Type[H], Type[U])
         extends Aliases[H, U]:
-
-        val p = MParsing()
-        import p.*
         import q.reflect.*
+
+        given MonadicTyping[q.type] with
+            def ident  = TypeRepr.of[U[tags.One]]
+            def tensor = TypeRepr.of[[a, b] =>> U[tags.Tensor[a, b]]]
+
+        val parse = MParsing()
+        val gen = MGeneration()
+
+        import parse.*
 
         def just[R: Type](expr: Expr[SyApp[H, U] ?=> R]): Expr[H[I, Reconstruct[U, R]]] =
             val t  = expr.asTerm
@@ -91,7 +97,7 @@ object smc:
                     s"""|failure
                         |${expr.asTerm}""".stripMargin
 
-            report.warning(s, expr)
+            report.info(s, expr)
             '{ $syn.dummy }
         end just
 
