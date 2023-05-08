@@ -72,6 +72,7 @@ final class MParsing[q <: Quotes & Singleton](using val q: q):
     end asMidSTerm
 
     val asEndTerm: Tree =\> PEnd =
+        case asAnywhereTerm(t)                           => t
         case Typed(Ident(name), _)                       => STerm.Result(Vector(vars.varNamed(name)))
         case Apply(TupleApp(()), ident.travector(names)) => STerm.Result(names.map(vars.varNamed))
 
