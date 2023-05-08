@@ -19,4 +19,12 @@ class SyntaxTest extends munit.FunSuite:
             bNode(v)
             (w, u)
         }
+        import smc.V
+
+        val y: DAG[1, 2] = prop { (a: V[Nat.`1`]) =>
+            val (u, v, w) = cNode(a)
+            bNode(v)
+            (w, u)
+        }
+
 end SyntaxTest

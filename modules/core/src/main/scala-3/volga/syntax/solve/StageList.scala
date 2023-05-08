@@ -48,6 +48,7 @@ object StageList:
             case UnknownVar(v, t) => s"unknown variable $v in $t"
             case UnusedVar(v)     => s"unused variable $v"
             case Other(m, t)      => s"$m in $t"
+    end Err
 
     type Vars[+V, +T]     = StageList[Basic[V, T]]
     type Aligned[+V, +T]  = StageList[Align[V, T]]
@@ -58,6 +59,7 @@ object StageList:
             case Assignment(recs, app) => (recs, Basic(prev, app.args, Some(term.applied)))
             case Application(app)      => (Vector(), Basic(prev, app.args, Some(term.applied)))
 
+            
     def fromTerms[S, T](
         input: Vector[S],
         terms: Vector[STerm[S, T] & Mid],
@@ -70,6 +72,13 @@ object StageList:
                 val (lastestInput, lastStage) = toStage(lastInput, app)
                 stages :+ lastStage :+ Basic(lastestInput, Vector(), None)
     end fromTerms
+
+    extension [T, V](list: Vars[V, T])
+        def withAdaptation[D](using V: Variable[V, D]): Either[Err[V, T], Adapted[V, T, D]] =
+            for
+                aligned <- doAlign(list)
+                adapted <- aligned.mapErr(histWithOp)
+            yield adapted
 
     private def history[V, T, D](align: Align[V, T])(using
         V: Variable[V, D]
@@ -110,12 +119,5 @@ object StageList:
             (result, aligned) = alignRes
             _                <- Either.cond(result.isEmpty, (), Err.UnusedVar(result.head))
         yield aligned
-
-    extension [T, V](list: Vars[V, T])
-        def withAdaptation[D](using V: Variable[V, D]): Either[Err[V, T], Adapted[V, T, D]] =
-            for
-                aligned <- doAlign(list)
-                adapted <- aligned.mapErr(histWithOp)
-            yield adapted
 
 end StageList

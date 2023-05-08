@@ -16,7 +16,27 @@ final class MParsing[q <: Quotes & Singleton](using val q: q):
     import q.reflect.*
     import Pos.*
     val vars = Vars[q.type]()
-    import vars.*
+
+    type Parsed = (Vector[Var[q.type]], Vector[PMid], PEnd)
+
+    def parseLambda(lam: Term): Either[VError, Parsed] =
+        lam match
+            case Lambda(valDefs, body) => parseBlock(valDefs, body)
+
+    def parseBlock(valDefs: Iterable[ValDef], block: Term): Either[VError, Parsed] = block match
+        case CFBlock(Lambda(valDefs, body)) => parseWithVals(valDefs, body)
+        case CFBlock(body)                  => parseWithVals(Nil, body)
+
+    private def parseWithVals(valDefs: List[ValDef], block: Tree): Either[VError, Parsed] = block match
+        case Block(mids, res) =>
+            report.info(s"${mids.view.map(_.toString).mkString("mids:", "\n---\n", "")}\nfinal\n$res")
+            val vs = valDefs.toVector.map:
+                case ValDef(name, tpe, _) => vars.varOf(name, tpe)
+            for
+                midTerms     <- VError.traverse(mids, asMidSTerm)(midTermErr)
+                detupledMids <- detuple(midTerms)
+                endTerm      <- VError.applyOr(res)(asEndTerm)(endTermErr(res))
+            yield (vs, detupledMids, endTerm)
 
     private type PMid      = STerm[Var[q], Tree] & Pos.Mid
     private type PMidTup   = STerm[Var[q], Tree] & (Pos.Mid | Pos.Tupling)
@@ -44,20 +64,20 @@ final class MParsing[q <: Quotes & Singleton](using val q: q):
     val asMidSTerm: Tree =\> PMidTup =
         case asAnywhereTerm(t)                                                                  => t
         case ValDef(name, t, Some(asApplication(app)))                                          =>
-            STerm.Assignment(Vector(varOf(name, t)), app)
+            STerm.Assignment(Vector(vars.varOf(name, t)), app)
         case ValDef(name, _, Some(Match(Typed(asApplication(app), t @ TupleRepr(i)), List(_)))) =>
-            STerm.Tupled(varNamed(name), i, app)
+            STerm.Tupled(vars.varNamed(name), i, app)
         case ValDef(name, t, Some(Select(Ident(tname), s"_${OfInt(i)}")))                       =>
-            STerm.Untupling(varNamed(tname), varOf(name, t), i - 1)
+            STerm.Untupling(vars.varNamed(tname), vars.varOf(name, t), i - 1)
     end asMidSTerm
 
     val asEndTerm: Tree =\> PEnd =
-        case Typed(Ident(name), _)                       => STerm.Result(Vector(varNamed(name)))
-        case Apply(TupleApp(()), ident.travector(names)) => STerm.Result(names.map(varNamed(_)))
+        case Typed(Ident(name), _)                       => STerm.Result(Vector(vars.varNamed(name)))
+        case Apply(TupleApp(()), ident.travector(names)) => STerm.Result(names.map(vars.varNamed))
 
     val asApplication: Tree =\> PApp =
         case Apply(Apply(_, List(t)), ident.travector(names)) =>
-            App(t, names.map(varNamed(_)))
+            App(t, names.map(vars.varNamed))
 
     val ident: Term =\> String =
         case Ident(name) => name
@@ -126,13 +146,11 @@ final class MParsing[q <: Quotes & Singleton](using val q: q):
         def end: Either[VError, Vector[PMid]] =
             if tuplings.isEmpty then Right(result)
             else
-                Left(() =>
-                    tuplings.values.foreach {
-                        case TuplingState(Some(App(tree, _)), _, _) =>
-                            q.reflect.report.error("incorrect tupling", tree.pos)
-                        case _                                      =>
-                    }
-                )
+                val errs = tuplings.values.collect:
+                    case TuplingState(Some(App(tree, _)), _, _) =>
+                        VError.atTree(tree)("incorrect tupling")
+
+                Left(errs.reduce(_ ++ _))
 
     end DetupleState
 
