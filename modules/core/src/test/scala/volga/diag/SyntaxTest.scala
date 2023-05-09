@@ -21,17 +21,19 @@ class SyntaxTest extends munit.FunSuite:
             val (u, v, w) = cNode(x)
             bNode(v)
             (w, u)
-        }
+        }       
 
         val exp1: DAG[1, 1] = prop.of1 { (a: V1) =>
             bNode(a)
             aNode()
         }
-        
+
+
         val exp2: DAG[2, 1] = prop.of2 { (a: V1, b: V1) =>
             bNode(a)
             bNode(b)
             aNode()
         }
 
+        
 end SyntaxTest

@@ -118,9 +118,10 @@ object StageList:
         val Basic(prev, next, bind) = list
         val full                    = V.toMap(preserved) ++ V.toMap(prev)
         val unknown                 = V.toMap(next) -- full.keys
+        def replenish(v: V)         = V.replenish(v, full(V.label(v)))
         if unknown.isEmpty then
-            val keep = (full -- next.view.map(V.label)).values.toVector
-            Right((keep, Align(VarList(prev, preserved), VarList(next, keep), bind)))
+            val keep = (full -- next.view.map(V.label)).view.values.map(replenish).toVector
+            Right((keep, Align(VarList(prev, preserved), VarList(next.map(replenish), keep), bind)))
         else Left(Err.UnknownVar(unknown.values.head, bind))
     end alignSingle
 

@@ -37,7 +37,8 @@ final class MParsing[q <: Quotes & Singleton](using val q: q):
                 midTerms     <- VError.traverse(mids, asMidSTerm)(midTermErr)
                 detupledMids <- detuple(midTerms)
                 endTerm      <- VError.applyOr(res)(asEndTerm)(endTermErr(res))
-            yield (vs, detupledMids, endTerm)
+            yield 
+                (vs, detupledMids, endTerm)
 
     private type PMid      = STerm[Var[q], Tree] & Pos.Mid
     private type PMidTup   = STerm[Var[q], Tree] & (Pos.Mid | Pos.Tupling)
@@ -48,7 +49,7 @@ final class MParsing[q <: Quotes & Singleton](using val q: q):
     val InlineTerm: Inlined =\> Term =
         case Inlined(_, _, t) => t
 
-    val CFBlock: Tree =\> Tree =
+    private val CFBlock: Tree =\> Tree =
         case Lambda(List(p), t) if p.tpt.tpe <:< SyAppRepr => t
 
     val asMidSTerm: Tree =\> PMidTup =

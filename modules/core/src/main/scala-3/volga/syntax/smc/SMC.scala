@@ -17,6 +17,7 @@ import volga.free.Nat
 import volga.syntax.parsing.VError
 import scala.util.chaining.given
 import volga.syntax.solve.StageList
+import scala.compiletime.summonInline
 
 abstract final class V[T]
 
@@ -49,48 +50,58 @@ final class Syntax[H[_, _], U[_]] extends Aliases[H, U]:
 
     def dummy[A, B]: H[A, B] = null.asInstanceOf[H[A, B]]
 
-    inline def of0[R](inline block: SyApp[H, U] ?=> R): H[I, Reconstruct[U, R]] =
+    inline def of0[R](inline block: SyApp[H, U] ?=> R)(using SymmetricCat[H, U]): H[I, Reconstruct[U, R]] =
         syntax(block)
 
-    inline def of1[A, B](inline f: SyApp[H, U] ?=> V[A] => B): H[A, Reconstruct[U, B]] =
+    inline def of1[A, B](inline f: SyApp[H, U] ?=> V[A] => B)(using SymmetricCat[H, U]): H[A, Reconstruct[U, B]] =
         syntax(f)
 
-    inline def of2[A, B, R](inline f: SyApp[H, U] ?=> (V[A], V[B]) => R): H[A x B, Reconstruct[U, R]] =
+    inline def of2[A, B, R](inline f: SyApp[H, U] ?=> (V[A], V[B]) => R)(using
+        SymmetricCat[H, U]
+    ): H[A x B, Reconstruct[U, R]] =
         syntax(f)
 
-    inline def of3[A, B, C, R](inline f: SyApp[H, U] ?=> (V[A], V[B], V[C]) => R): H[A x B x C, Reconstruct[U, R]] =
+    inline def of3[A, B, C, R](inline f: SyApp[H, U] ?=> (V[A], V[B], V[C]) => R)(using
+        SymmetricCat[H, U]
+    ): H[A x B x C, Reconstruct[U, R]] =
         syntax(f)
 
     inline def of4[A, B, C, D, R](
         inline f: SyApp[H, U] ?=> (V[A], V[B], V[C], V[D]) => R
-    ): H[A x B x C x D, Reconstruct[U, R]] =
+    )(using SymmetricCat[H, U]): H[A x B x C x D, Reconstruct[U, R]] =
         syntax(f)
-    
+
     inline def of5[A, B, C, D, E, R](
         inline f: SyApp[H, U] ?=> (V[A], V[B], V[C], V[D], V[E]) => R
-    ): H[A x B x C x D x E, Reconstruct[U, R]] =
+    )(using SymmetricCat[H, U]): H[A x B x C x D x E, Reconstruct[U, R]] =
         syntax(f)
 
     inline def of6[A, B, C, D, E, F, R](
         inline f: SyApp[H, U] ?=> (V[A], V[B], V[C], V[D], V[E], V[F]) => R
-    ): H[A x B x C x D x E x F, Reconstruct[U, R]] =
+    )(using SymmetricCat[H, U]): H[A x B x C x D x E x F, Reconstruct[U, R]] =
         syntax(f)
 
     inline def of7[A, B, C, D, E, F, G, R](
         inline f: SyApp[H, U] ?=> (V[A], V[B], V[C], V[D], V[E], V[F], V[G]) => R
-    ): H[A x B x C x D x E x F x G, Reconstruct[U, R]] =
+    )(using SymmetricCat[H, U]): H[A x B x C x D x E x F x G, Reconstruct[U, R]] =
         syntax(f)
 
-    private inline def syntax[I, R](inline block: SyApp[H, U] ?=> Any): H[I, R] =
-        ${ smcMacro[H, U, I, R]('this)('block) }
+    private inline def syntax[I, R](inline block: SyApp[H, U] ?=> Any)(using smc: SymmetricCat[H, U]): H[I, R] =
+        ${ Syntax.smcMacro[H, U, I, R]('this, 'smc)('block) }
 
 end Syntax
+object Syntax:
+    def smcMacro[H[_, _]: Type, U[_]: Type, A: Type, R: Type](
+        syntax: Expr[Syntax[H, U]],
+        smc: Expr[SymmetricCat[H, U]]
+    )(
+        body: Expr[SyApp[H, U] ?=> Any]
+    )(using Quotes): Expr[H[A, R]] = SMCMacro[H, U](syntax, smc).smcSyntax(body)
 
-def smcMacro[H[_, _]: Type, U[_]: Type, A: Type, R: Type](syntax: Expr[Syntax[H, U]])(
-    body: Expr[SyApp[H, U] ?=> Any]
-)(using Quotes): Expr[H[A, R]] = SMCMacro[H, U](syntax).smcSyntax(body)
-
-class SMCMacro[H[_, _], U[_]](syn: Expr[Syntax[H, U]])(using val q: Quotes)(using Type[H], Type[U])
+class SMCMacro[H[_, _], U[_]](
+    sym: Expr[Syntax[H, U]],
+    smc: Expr[SymmetricCat[H, U]]
+)(using Type[H], Type[U])(using val q: Quotes)
     extends Aliases[H, U]:
     import q.reflect.*
 
@@ -99,7 +110,7 @@ class SMCMacro[H[_, _], U[_]](syn: Expr[Syntax[H, U]])(using val q: Quotes)(usin
         def tensor = TypeRepr.of[[a, b] =>> U[tags.Tensor[a, b]]]
 
     val parse = MParsing()
-    val gen   = MGeneration()
+    val gen   = MGeneration(smc)
 
     def smcSyntax[I: Type, R: Type](expr: Expr[Any]): Expr[H[I, R]] =
         val t = expr.asTerm
@@ -118,7 +129,18 @@ class SMCMacro[H[_, _], U[_]](syn: Expr[Syntax[H, U]])(using val q: Quotes)(usin
 
         val stageRepr = stageList.mkString("\n")
 
+        // val xxx = stageList.view.flatMap{x => 
+        //    x.next
+        // }.collect{ 
+        //     case x if x.typ.isEmpty => x.name
+        // }.mkString("\n")
+
+        // if xxx.nonEmpty then
+        //     report.warning(s"untyped vars:\n$xxx")
+
         val adaptedRepr = adapted.mkString("\n")
+
+        val generated = gen.generate(adapted)
 
         val s =
             s"""|success 
@@ -132,7 +154,7 @@ class SMCMacro[H[_, _], U[_]](syn: Expr[Syntax[H, U]])(using val q: Quotes)(usin
 
         report.info(s, expr)
 
-        '{ $syn.dummy[I, R] }
+        '{ $sym.dummy[I, R] }
     end smcSyntax
 
 end SMCMacro

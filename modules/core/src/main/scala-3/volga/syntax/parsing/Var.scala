@@ -1,13 +1,20 @@
-package volga.syntax.parsing
+package volga
+package syntax.parsing
 
 import scala.quoted.Quotes
 import volga.syntax.solve.PMagma
 
 trait Var[+q <: Quotes & Singleton](val q: q):
+    self =>
     import q.reflect.*
     def name: String
     def typ: Option[TypeRepr]
     def mndType: MndType[q, TypeRepr] = MndType(typ)
+
+    def replenish(tgt: Var[q.type]): Var[q.type] = new Var(q):
+        override val name: String = self.name
+        override val typ          = self.typ.orElse(tgt.typ)
+end Var
 
 object Var:
     given variable[q <: Quotes & Singleton](using
@@ -20,10 +27,14 @@ object Var:
 
         override def describe(v: Var[q.type]): MndType[q, q.reflect.TypeRepr] = v.mndType
 
+        override def replenish(src: Var[q.type], tgt: Var[q.type]) = src.replenish(tgt)
+
 end Var
 
 final class Vars[q <: Quotes & Singleton](using val q: q):
     import q.reflect.*
+
+    private val VSym = TypeRepr.of[volga.syntax.smc.V[?]].typeSymbol
     private case class TyVar(name: String, typ: Option[TypeRepr] = None) extends Var[q.type](q):
         override def toString: String = typ match
             case None    => name
@@ -36,9 +47,8 @@ final class Vars[q <: Quotes & Singleton](using val q: q):
 
     def varOf(name: String, t: TypeTree): Var[q] =
         import q.reflect.*
-        t.tpe match
+        t.tpe.baseType(VSym) match
             case AppliedType(t1, List(t2)) => TyVar(name, Some(t2))
-            case _                         => TyVar(name)
     end varOf
 
     def varNamed(name: String): Var[q] = TyVar(name)
