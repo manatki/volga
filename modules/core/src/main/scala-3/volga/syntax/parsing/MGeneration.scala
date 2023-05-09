@@ -7,5 +7,5 @@ import scala.quoted.Expr
 final class MGeneration[q <: Quotes & Singleton](using val q: q)(using typing: MonadicTyping[q.type]):
     import q.reflect.*
 
-    def generate(terms: StageList.Adapted[Tree, Var[q.type], TypeRepr]): Expr[Nothing] =
-        '{ null.asInstanceOf[Nothing] }
+    def generate(terms: StageList.Adapted[Tree, Var[q.type], TypeRepr]): Tree =
+        ???

@@ -14,6 +14,7 @@ import scala.language.implicitConversions
 import volga.syntax.solve.BinOp
 import volga.util.collections.*
 import volga.syntax.parsing.Var
+import scala.quoted.Quotes
 
 object StageList:
     import Pos.*
@@ -39,15 +40,26 @@ object StageList:
         binding: Option[T] = None
     )
 
+    trait NoTerm:
+        def term = None
+
     enum Err[+V, +T] extends RuntimeException:
-        case UnknownVar(v: V, t: Option[T])
-        case UnusedVar(v: V)
+        case UnknownVar(v: V, term: Option[T])
+        case UnusedVar(v: V) extends Err[V, T], NoTerm
         case Other(message: String, term: Option[T])
 
+        def term: Option[T]
+
         override def getMessage = this match
-            case UnknownVar(v, t) => s"unknown variable $v in $t"
+            case UnknownVar(v, t) => s"unknown variable $v"
             case UnusedVar(v)     => s"unused variable $v"
-            case Other(m, t)      => s"$m in $t"
+            case Other(m, t)      => s"$m"
+
+        def reportAndAbort(using q: Quotes)(using ev: T <:< q.reflect.Tree): Nothing =
+            term match
+                case Some(t) => q.reflect.report.errorAndAbort(getMessage, ev(t).pos)
+                case None    => q.reflect.report.errorAndAbort(getMessage)
+
     end Err
 
     type Vars[+V, +T]     = StageList[Basic[V, T]]
@@ -59,7 +71,6 @@ object StageList:
             case Assignment(recs, app) => (recs, Basic(prev, app.args, Some(term.applied)))
             case Application(app)      => (Vector(), Basic(prev, app.args, Some(term.applied)))
 
-            
     def fromTerms[S, T](
         input: Vector[S],
         terms: Vector[STerm[S, T] & Mid],

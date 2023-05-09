@@ -11,25 +11,26 @@ import volga.syntax.parsing.VError
 import volga.syntax.parsing.Pos.{Mid, End, Tupling}
 import volga.syntax.parsing.STerm
 import volga.syntax.parsing.App
+import volga.syntax.smc.SyApp
 
 final class MParsing[q <: Quotes & Singleton](using val q: q):
     import q.reflect.*
     import Pos.*
     val vars = Vars[q.type]()
 
+    val SyAppRepr = TypeRepr.of[SyApp[?, ?]]
+
     type Parsed = (Vector[Var[q.type]], Vector[PMid], PEnd)
 
-    def parseLambda(lam: Term): Either[VError, Parsed] =
-        lam match
-            case Lambda(valDefs, body) => parseBlock(valDefs, body)
-
-    def parseBlock(valDefs: Iterable[ValDef], block: Term): Either[VError, Parsed] = block match
-        case CFBlock(Lambda(valDefs, body)) => parseWithVals(valDefs, body)
-        case CFBlock(body)                  => parseWithVals(Nil, body)
+    @tailrec def parseBlock(block: Tree): Either[VError, Parsed] = block match
+        case CFBlock(body)          => parseBlock(body)
+        case Block(Nil, res: Block) => parseBlock(res)
+        case InlineTerm(t)          => parseBlock(t)
+        case Lambda(valDefs, body)  => parseWithVals(valDefs, body)
+        case body                   => parseWithVals(Nil, body)
 
     private def parseWithVals(valDefs: List[ValDef], block: Tree): Either[VError, Parsed] = block match
         case Block(mids, res) =>
-            report.info(s"${mids.view.map(_.toString).mkString("mids:", "\n---\n", "")}\nfinal\n$res")
             val vs = valDefs.toVector.map:
                 case ValDef(name, tpe, _) => vars.varOf(name, tpe)
             for
@@ -45,21 +46,10 @@ final class MParsing[q <: Quotes & Singleton](using val q: q):
     private type PApp      = App[Var[q], Tree]
 
     val InlineTerm: Inlined =\> Term =
-        case Inlined(None, Nil, t) => t
-
-    val CFBody: Term =\> Term =
-        case Block(Nil, t) => t
-        case t             => t
+        case Inlined(_, _, t) => t
 
     val CFBlock: Tree =\> Tree =
-        case InlineTerm(
-              Block(
-                List(DefDef(nameD, _, _, Some(InlineTerm(CFBody(t))))),
-                Closure(Ident(nameR), None)
-              )
-            ) if nameD == nameR =>
-            t
-    end CFBlock
+        case Lambda(List(p), t) if p.tpt.tpe <:< SyAppRepr => t
 
     val asMidSTerm: Tree =\> PMidTup =
         case asAnywhereTerm(t)                                                                  => t

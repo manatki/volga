@@ -18,8 +18,8 @@ object VError:
         def reportAndAbort() = rep.errorAndAbort(message)
 
     def atTree(using q: Quotes)(tree: q.reflect.Tree)(s: String): VError = new:
-        def report()         = rep.error(s, tree.pos)
-        def reportAndAbort() = rep.errorAndAbort(s, tree.pos)
+        def report()         = rep.error(s"$s\n $tree", tree.pos)
+        def reportAndAbort() = rep.errorAndAbort(s"$s\n $tree", tree.pos)
 
     class Concat(val errs: Vector[VError]) extends VError:
         def report(): Unit            = errs.foreach(_.report())

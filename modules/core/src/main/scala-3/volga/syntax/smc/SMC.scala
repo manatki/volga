@@ -49,21 +49,46 @@ final class Syntax[H[_, _], U[_]] extends Aliases[H, U]:
 
     def dummy[A, B]: H[A, B] = null.asInstanceOf[H[A, B]]
 
-    inline def just[R](inline block: SyApp[H, U] ?=> R): H[I, Reconstruct[U, R]] =
-        ${ justMacro[H, U, R]('this)('block) }
+    inline def of0[R](inline block: SyApp[H, U] ?=> R): H[I, Reconstruct[U, R]] =
+        syntax(block)
 
-    inline def apply[A, B](inline f: SyApp[H, U] ?=> V[A] => B): H[A, Reconstruct[U, B]] =
-        ${ applyMacro[H, U, A, B]('this)('f) }
+    inline def of1[A, B](inline f: SyApp[H, U] ?=> V[A] => B): H[A, Reconstruct[U, B]] =
+        syntax(f)
+
+    inline def of2[A, B, R](inline f: SyApp[H, U] ?=> (V[A], V[B]) => R): H[A x B, Reconstruct[U, R]] =
+        syntax(f)
+
+    inline def of3[A, B, C, R](inline f: SyApp[H, U] ?=> (V[A], V[B], V[C]) => R): H[A x B x C, Reconstruct[U, R]] =
+        syntax(f)
+
+    inline def of4[A, B, C, D, R](
+        inline f: SyApp[H, U] ?=> (V[A], V[B], V[C], V[D]) => R
+    ): H[A x B x C x D, Reconstruct[U, R]] =
+        syntax(f)
+    
+    inline def of5[A, B, C, D, E, R](
+        inline f: SyApp[H, U] ?=> (V[A], V[B], V[C], V[D], V[E]) => R
+    ): H[A x B x C x D x E, Reconstruct[U, R]] =
+        syntax(f)
+
+    inline def of6[A, B, C, D, E, F, R](
+        inline f: SyApp[H, U] ?=> (V[A], V[B], V[C], V[D], V[E], V[F]) => R
+    ): H[A x B x C x D x E x F, Reconstruct[U, R]] =
+        syntax(f)
+
+    inline def of7[A, B, C, D, E, F, G, R](
+        inline f: SyApp[H, U] ?=> (V[A], V[B], V[C], V[D], V[E], V[F], V[G]) => R
+    ): H[A x B x C x D x E x F x G, Reconstruct[U, R]] =
+        syntax(f)
+
+    private inline def syntax[I, R](inline block: SyApp[H, U] ?=> Any): H[I, R] =
+        ${ smcMacro[H, U, I, R]('this)('block) }
 
 end Syntax
 
-def justMacro[H[_, _]: Type, U[_]: Type, R: Type](syntax: Expr[Syntax[H, U]])(
-    block: Expr[SyApp[H, U] ?=> R]
-)(using Quotes): Expr[H[U[tags.One], Reconstruct[U, R]]] = SMCMacro(syntax).block(block)
-
-def applyMacro[H[_, _]: Type, U[_]: Type, A: Type, R: Type](syntax: Expr[Syntax[H, U]])(
-    lam: Expr[SyApp[H, U] ?=> V[A] => R]
-)(using Quotes): Expr[H[A, Reconstruct[U, R]]] = SMCMacro[H, U](syntax).lambda[A, R](lam)
+def smcMacro[H[_, _]: Type, U[_]: Type, A: Type, R: Type](syntax: Expr[Syntax[H, U]])(
+    body: Expr[SyApp[H, U] ?=> Any]
+)(using Quotes): Expr[H[A, R]] = SMCMacro[H, U](syntax).smcSyntax(body)
 
 class SMCMacro[H[_, _], U[_]](syn: Expr[Syntax[H, U]])(using val q: Quotes)(using Type[H], Type[U])
     extends Aliases[H, U]:
@@ -76,29 +101,34 @@ class SMCMacro[H[_, _], U[_]](syn: Expr[Syntax[H, U]])(using val q: Quotes)(usin
     val parse = MParsing()
     val gen   = MGeneration()
 
-    def block[R](expr: Expr[SyApp[H, U] ?=> R])(using Type[I], Type[R]): Expr[H[I, Reconstruct[U, R]]] =
-        smcSyntax(expr)
-
-    def lambda[A, R](expr: Expr[SyApp[H, U] ?=> V[A] => R])(using Type[A], Type[R]): Expr[H[A, Reconstruct[U, R]]] =
-        smcSyntax(expr)
-
-    private def smcSyntax[I: Type, R: Type](expr: Expr[Any]): Expr[H[I, R]] =
+    def smcSyntax[I: Type, R: Type](expr: Expr[Any]): Expr[H[I, R]] =
         val t = expr.asTerm
 
-        val (vars, mterms, fterm) = parse.parseBlock(Nil, t) match
-            case Left(verror)  =>
-                verror.reportAndAbort()
+        val (vars, mterms, fterm) = parse.parseBlock(t) match
+            case Left(verror)  => verror.reportAndAbort()
             case Right(values) => values
 
         val stageList = StageList.fromTerms(vars, mterms, fterm)
 
-        val res = (mterms :+ fterm).view.mkString("\n")
+        val adapted = StageList.withAdaptation(stageList) match
+            case Left(e)     => e.reportAndAbort
+            case Right(vals) => vals
+
+        val termsRepr = (mterms :+ fterm).view.mkString("\n")
+
+        val stageRepr = stageList.mkString("\n")
+
+        val adaptedRepr = adapted.mkString("\n")
 
         val s =
             s"""|success 
                 |${t.show(using Printer.TreeStructure)}
                 |------
-                |$res""".stripMargin
+                |$termsRepr
+                |------
+                |$stageRepr
+                |------
+                |$adaptedRepr""".stripMargin
 
         report.info(s, expr)
 
