@@ -12,6 +12,7 @@ import volga.syntax.solve.binop.Side
 import scala.compiletime.summonInline
 import volga.syntax.solve.binop.L
 import volga.syntax.solve.binop.R
+import volga.syntax.solve.BinHistory.HChain
 
 final class MGeneration[H[_, _]: Type, U[_]: Type, q <: Quotes & Singleton](sym: Expr[SymmetricCat[H, U]])(using
     val q: q
@@ -55,7 +56,7 @@ final class MGeneration[H[_, _]: Type, U[_]: Type, q <: Quotes & Singleton](sym:
     private def generateForBinHistory(hist: BinHistory[TypeRepr]): TypedHom = hist match
         case BinHistory.HRotate(side, l, m, r) => hrotate(side, l, m, r)
         case BinHistory.HSwap(l, r)            => swap(l, r)
-        case BinHistory.HSplit(left, right)    => ???
+        case BinHistory.HSplit(left, right)    => split(left, right)
         case BinHistory.HConsume(side, v)      => consume(side, v)
         case BinHistory.HGrow(side, v)         => grow(side, v)
 
@@ -137,6 +138,25 @@ final class MGeneration[H[_, _]: Type, U[_]: Type, q <: Quotes & Singleton](sym:
                         )
                 end match
     end grow
+
+    private def split(left: HChain[TypeRepr], right: HChain[TypeRepr]): TypedHom =
+        val leftTerm  = generateAdaptation(left.history, left.start)
+        val rightTerm = generateAdaptation(right.history, right.start)
+        import leftTerm.given
+        import rightTerm.given
+        TypedHomC(
+          hom = '{
+              $sym.tensor(${ leftTerm.hom }, ${ rightTerm.hom })(using
+                ${ leftTerm.obI },
+                ${ leftTerm.obO },
+                ${ rightTerm.obI },
+                ${ rightTerm.obO }
+              )
+          },
+          obI = '{ $sym.tensorOb(${ leftTerm.obI }, ${ rightTerm.obI }) },
+          obO = '{ $sym.tensorOb(${ leftTerm.obO }, ${ rightTerm.obO }) }
+        )
+    end split
 
     private def hrotate(side: Side, x: TypeRepr, y: TypeRepr, z: TypeRepr): TypedHom =
         x.asType match
