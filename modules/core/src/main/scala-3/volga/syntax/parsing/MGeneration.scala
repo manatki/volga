@@ -56,7 +56,7 @@ final class MGeneration[H[_, _]: Type, U[_]: Type, q <: Quotes & Singleton](sym:
         case BinHistory.HRotate(side, l, m, r) => hrotate(side, l, m, r)
         case BinHistory.HSwap(l, r)            => swap(l, r)
         case BinHistory.HSplit(left, right)    => ???
-        case BinHistory.HConsume(side, v)      => ???
+        case BinHistory.HConsume(side, v)      => consume(side, v)
         case BinHistory.HGrow(side, v)         => ???
 
     private def compose(x: TypedHom, y: TypedHom): TypedHom =
@@ -88,6 +88,35 @@ final class MGeneration[H[_, _]: Type, U[_]: Type, q <: Quotes & Singleton](sym:
                           obO = '{ $sym.tensorOb($obO, $obI) }
                         )
 
+    private def identity(x: TypeRepr): TypedHom =
+        x.asType match
+            case '[x] =>
+                val obX: Expr[U[tags.Obj[x]]] = '{ summonInline }
+                TypedHomC(
+                  hom = '{ $sym.identity(using $obX) },
+                  obI = obX,
+                  obO = obX
+                )
+
+    private def consume(side: Side, x: TypeRepr): TypedHom =
+        x.asType match
+            case '[x] =>
+                val obX: Expr[U[tags.Obj[x]]] = '{ summonInline }
+                side match
+                    case L =>
+                        TypedHomC(
+                          hom = '{ $sym.leftUnit(using $obX).to },
+                          obI = '{ $sym.tensorOb($sym.unitOb, $obX) },
+                          obO = obX
+                        )
+                    case R =>
+                        TypedHomC(
+                          hom = '{ $sym.rightUnit(using $obX).to },
+                          obI = '{ $sym.tensorOb($obX, $sym.unitOb) },
+                          obO = obX
+                        )
+                end match
+
     private def hrotate(side: Side, x: TypeRepr, y: TypeRepr, z: TypeRepr): TypedHom =
         x.asType match
             case '[x] =>
@@ -112,15 +141,6 @@ final class MGeneration[H[_, _]: Type, U[_]: Type, q <: Quotes & Singleton](sym:
                                           obO = '{ $sym.tensorOb($obX, $sym.tensorOb($obY, $obZ)) }
                                         )
                                 end match
-
-    private def identity(x: TypeRepr): TypedHom =
-        x.asType match
-            case '[x] =>
-                val obX: Expr[U[tags.Obj[x]]] = '{ summonInline }
-                TypedHomC(
-                  hom = '{ $sym.identity(using $obX) },
-                  obI = obX,
-                  obO = obX
-                )
+    end hrotate
 
 end MGeneration
