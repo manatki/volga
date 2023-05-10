@@ -10,6 +10,8 @@ import volga.syntax.solve.Adaptation
 import volga.syntax.solve.BinHistory
 import volga.syntax.solve.binop.Side
 import scala.compiletime.summonInline
+import volga.syntax.solve.binop.L
+import volga.syntax.solve.binop.R
 
 final class MGeneration[H[_, _]: Type, U[_]: Type, q <: Quotes & Singleton](sym: Expr[SymmetricCat[H, U]])(using
     val q: q
@@ -51,7 +53,7 @@ final class MGeneration[H[_, _]: Type, U[_]: Type, q <: Quotes & Singleton](sym:
         adapt.view.map(generateForBinHistory).reduceOption(compose).getOrElse(identity(inT))
 
     private def generateForBinHistory(hist: BinHistory[TypeRepr]): TypedHom = hist match
-        case BinHistory.HRotate(side, l, m, r) => ???
+        case BinHistory.HRotate(side, l, m, r) => hrotate(side, l, m, r)
         case BinHistory.HSwap(l, r)            => swap(l, r)
         case BinHistory.HSplit(left, right)    => ???
         case BinHistory.HConsume(side, v)      => ???
@@ -86,7 +88,30 @@ final class MGeneration[H[_, _]: Type, U[_]: Type, q <: Quotes & Singleton](sym:
                           obO = '{ $sym.tensorOb($obO, $obI) }
                         )
 
-    private def hrotate(side: Side, x: TypeRepr, y: TypeRepr, z: TypeRepr): TypedHom = ???
+    private def hrotate(side: Side, x: TypeRepr, y: TypeRepr, z: TypeRepr): TypedHom =
+        x.asType match
+            case '[x] =>
+                y.asType match
+                    case '[y] =>
+                        z.asType match
+                            case '[z] =>
+                                val obX: Expr[U[tags.Obj[x]]] = '{ summonInline }
+                                val obY: Expr[U[tags.Obj[y]]] = '{ summonInline }
+                                val obZ: Expr[U[tags.Obj[z]]] = '{ summonInline }
+                                side match
+                                    case L =>
+                                        TypedHomC(
+                                          hom = '{ $sym.assocLeft(using $obX, $obY, $obZ) },
+                                          obI = '{ $sym.tensorOb($obX, $sym.tensorOb($obY, $obZ)) },
+                                          obO = '{ $sym.tensorOb($sym.tensorOb($obX, $obY), $obZ) }
+                                        )
+                                    case R =>
+                                        TypedHomC(
+                                          hom = '{ $sym.assocRight(using $obX, $obY, $obZ) },
+                                          obI = '{ $sym.tensorOb($sym.tensorOb($obX, $obY), $obZ) },
+                                          obO = '{ $sym.tensorOb($obX, $sym.tensorOb($obY, $obZ)) }
+                                        )
+                                end match
 
     private def identity(x: TypeRepr): TypedHom =
         x.asType match
