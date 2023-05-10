@@ -32,10 +32,8 @@ final class MGeneration[H[_, _]: Type, U[_]: Type, q <: Quotes & Singleton](sym:
 
     type TypedHom = TypedHomC[?, ?]
 
-    def generate(terms: StageList.Adapted[Var[q.type], Tree, MndType[q, TypeRepr]]): Tree =
-        validate(terms)
-        '{ () }.asTerm
-    end generate
+    def generate(terms: StageList.Adapted[Var[q.type], Tree, MndType[q, TypeRepr]]): Expr[Any] =
+        terms.view.map(generateAdaptTerm).reduce(compose).hom
 
     private def genType(v: VarList[Var[q.type]]): TypeRepr =
         if v.goThrough.isEmpty then joinType(v.effective)
