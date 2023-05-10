@@ -24,7 +24,9 @@ object StageList:
 
     opaque type StageList[+X] <: Vector[X] = Vector[X]
 
-    case class Basic[+V, +T](prev: Vector[V], next: Vector[V], binding: Option[T])
+    case class Binding[+V, +T](term: T, output: Vector[V])
+
+    case class Basic[+V, +T](prev: Vector[V], next: Vector[V], binding: Option[Binding[V, T]])
     case class VarList[+V](effective: Vector[V], goThrough: Vector[V]):
         def bin: Bin[V] =
             val effectiveBin = Bin.fromElements(effective)
@@ -32,12 +34,12 @@ object StageList:
             if goThrough.isEmpty then effectiveBin
             else Bin.Branch(effectiveBin, goThroughBin)
 
-    case class Align[+V, +T](prev: VarList[V], next: VarList[V], binding: Option[T])
+    case class Align[+V, +T](prev: VarList[V], next: VarList[V], binding: Option[Binding[V, T]])
     final case class Adapt[+V, +T, +R](
         prev: VarList[V],
         next: VarList[V],
         adaptation: Adaptation[R] = Vector.empty,
-        binding: Option[T] = None
+        binding: Option[Binding[V, T]] = None
     )
 
     trait NoTerm:
@@ -68,8 +70,8 @@ object StageList:
 
     private def toStage[S, T](prev: Vector[S], term: STerm[S, T] & Mid): (Vector[S], Basic[S, T]) =
         term match
-            case Assignment(recs, app) => (recs, Basic(prev, app.args, Some(term.applied)))
-            case Application(app)      => (Vector(), Basic(prev, app.args, Some(term.applied)))
+            case Assignment(recs, app) => (recs, Basic(prev, app.args, Some(Binding(term.applied, recs))))
+            case Application(app)      => (Vector(), Basic(prev, app.args, Some(Binding(term.applied, Vector()))))
 
     def fromTerms[S, T](
         input: Vector[S],
@@ -106,7 +108,7 @@ object StageList:
 
     def histWithOp[V, T, D](align: Align[V, T])(using Variable[V, D]): Either[Err[V, T], Adapt[V, T, D]] =
         history(align).fold(
-          message => Left(Err.Other(message, align.binding)),
+          message => Left(Err.Other(message, align.binding.map(_.term))),
           adaptation => Right(Adapt(align.prev, align.next, adaptation, align.binding))
         )
 
@@ -122,7 +124,7 @@ object StageList:
         if unknown.isEmpty then
             val keep = (full -- next.view.map(V.label)).view.values.map(replenish).toVector
             Right((keep, Align(VarList(prev, preserved), VarList(next.map(replenish), keep), bind)))
-        else Left(Err.UnknownVar(unknown.values.head, bind))
+        else Left(Err.UnknownVar(unknown.values.head, bind.map(_.term)))
     end alignSingle
 
     private def doAlign[V, T](vars: Vars[V, T])(using V: Labeled[V]): Either[Err[V, T], Aligned[V, T]] =

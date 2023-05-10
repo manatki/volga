@@ -33,6 +33,7 @@ final class MGeneration[H[_, _]: Type, U[_]: Type, q <: Quotes & Singleton](sym:
     type TypedHom = TypedHomC[?, ?]
 
     def generate(terms: StageList.Adapted[Var[q.type], Tree, MndType[q, TypeRepr]]): Tree =
+        validate(terms)
         '{ () }.asTerm
     end generate
 
@@ -48,7 +49,19 @@ final class MGeneration[H[_, _]: Type, U[_]: Type, q <: Quotes & Singleton](sym:
         adapt: StageList.Adapt[Var[q.type], Tree, TypeRepr]
     ): TypedHom =
         val preamble = generateAdaptation(adapt.adaptation, genType(adapt.prev))
-        ???
+        adapt.binding match
+            case None       => preamble
+            case Some(bind) =>
+                val termHom  = treeToHom(bind.term, adapt.next.effective, bind.output)
+                val mainPart =
+                    if adapt.next.goThrough.nonEmpty
+                    then
+                        val goThrough = identity(joinType(adapt.next.goThrough))
+                        split(termHom, goThrough)
+                    else termHom
+                compose(preamble, mainPart)
+        end match
+    end generateAdaptTerm
 
     private def generateAdaptation(adapt: Adaptation[TypeRepr], inT: => TypeRepr): TypedHom =
         adapt.view.map(generateForBinHistory).reduceOption(compose).getOrElse(identity(inT))
@@ -56,7 +69,7 @@ final class MGeneration[H[_, _]: Type, U[_]: Type, q <: Quotes & Singleton](sym:
     private def generateForBinHistory(hist: BinHistory[TypeRepr]): TypedHom = hist match
         case BinHistory.HRotate(side, l, m, r) => hrotate(side, l, m, r)
         case BinHistory.HSwap(l, r)            => swap(l, r)
-        case BinHistory.HSplit(left, right)    => split(left, right)
+        case BinHistory.HSplit(left, right)    => splitChain(left, right)
         case BinHistory.HConsume(side, v)      => consume(side, v)
         case BinHistory.HGrow(side, v)         => grow(side, v)
 
@@ -139,22 +152,25 @@ final class MGeneration[H[_, _]: Type, U[_]: Type, q <: Quotes & Singleton](sym:
                 end match
     end grow
 
-    private def split(left: HChain[TypeRepr], right: HChain[TypeRepr]): TypedHom =
+    private def splitChain(left: HChain[TypeRepr], right: HChain[TypeRepr]): TypedHom =
         val leftTerm  = generateAdaptation(left.history, left.start)
         val rightTerm = generateAdaptation(right.history, right.start)
-        import leftTerm.given
-        import rightTerm.given
+        split(leftTerm, rightTerm)
+
+    private def split(left: TypedHom, right: TypedHom): TypedHom =
+        import left.given
+        import right.given
         TypedHomC(
           hom = '{
-              $sym.tensor(${ leftTerm.hom }, ${ rightTerm.hom })(using
-                ${ leftTerm.obI },
-                ${ leftTerm.obO },
-                ${ rightTerm.obI },
-                ${ rightTerm.obO }
+              $sym.tensor(${ left.hom }, ${ right.hom })(using
+                ${ left.obI },
+                ${ left.obO },
+                ${ right.obI },
+                ${ right.obO }
               )
           },
-          obI = '{ $sym.tensorOb(${ leftTerm.obI }, ${ rightTerm.obI }) },
-          obO = '{ $sym.tensorOb(${ leftTerm.obO }, ${ rightTerm.obO }) }
+          obI = '{ $sym.tensorOb(${ left.obI }, ${ right.obI }) },
+          obO = '{ $sym.tensorOb(${ left.obO }, ${ right.obO }) }
         )
     end split
 
@@ -183,5 +199,30 @@ final class MGeneration[H[_, _]: Type, U[_]: Type, q <: Quotes & Singleton](sym:
                                         )
                                 end match
     end hrotate
+
+    def validate(adapted: StageList.Adapted[Var[q.type], Tree, MndType[q, TypeRepr]]): Unit =
+        for
+            adapt            <- adapted
+            (position, vars) <- Array(
+                                  "next.effective" -> adapt.next.effective,
+                                  "next.goThrough" -> adapt.next.goThrough,
+                                  "prev.effective" -> adapt.prev.effective,
+                                  "prev.goThrough" -> adapt.prev.goThrough,
+                                  "bindingRes"     -> adapt.binding.map(_.output).getOrElse(Vector())
+                                )
+            v                <- vars
+            if v.typ.isEmpty
+        do report.error(s"untyped variable $v at $position")
+
+    private def treeToHom(tree: Tree, inVars: Vector[Var[q.type]], outVars: Vector[Var[q.type]]): TypedHom =
+        joinType(inVars).asType match
+            case '[i] =>
+                joinType(outVars).asType match
+                    case '[o] =>
+                        TypedHomC(
+                          hom = tree.asExpr.asExprOf[H[i, o]],
+                          obI = '{ summonInline[U[tags.Obj[i]]] },
+                          obO = '{ summonInline[U[tags.Obj[o]]] }
+                        )
 
 end MGeneration

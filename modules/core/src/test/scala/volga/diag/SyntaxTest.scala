@@ -16,6 +16,7 @@ class SyntaxTest extends munit.FunSuite:
         val bNode = node("b", 1, 0)
         val cNode = node("c", 1, 3)
 
+        
         val exp0: DAG[0, 2] = prop.of0 {
             val x         = aNode()
             val (u, v, w) = cNode(x)
@@ -34,6 +35,6 @@ class SyntaxTest extends munit.FunSuite:
             bNode(b)
             aNode()
         }
-        
+
         
 end SyntaxTest
