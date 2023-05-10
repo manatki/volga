@@ -34,6 +34,6 @@ class SyntaxTest extends munit.FunSuite:
             bNode(b)
             aNode()
         }
-
+        
         
 end SyntaxTest

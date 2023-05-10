@@ -9,7 +9,8 @@ trait Var[+q <: Quotes & Singleton](val q: q):
     import q.reflect.*
     def name: String
     def typ: Option[TypeRepr]
-    def mndType: MndType[q, TypeRepr] = MndType(typ)
+    def mndType: MndType[q, TypeRepr] = MndType(requireTyp)
+    def requireTyp: TypeRepr          = typ.getOrElse(report.errorAndAbort(s"Variable $name has no type"))
 
     def replenish(tgt: Var[q.type]): Var[q.type] = new Var(q):
         override val name: String = self.name
