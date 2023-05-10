@@ -57,7 +57,7 @@ final class MGeneration[H[_, _]: Type, U[_]: Type, q <: Quotes & Singleton](sym:
         case BinHistory.HSwap(l, r)            => swap(l, r)
         case BinHistory.HSplit(left, right)    => ???
         case BinHistory.HConsume(side, v)      => consume(side, v)
-        case BinHistory.HGrow(side, v)         => ???
+        case BinHistory.HGrow(side, v)         => grow(side, v)
 
     private def compose(x: TypedHom, y: TypedHom): TypedHom =
         type A = x.I
@@ -116,6 +116,27 @@ final class MGeneration[H[_, _]: Type, U[_]: Type, q <: Quotes & Singleton](sym:
                           obO = obX
                         )
                 end match
+    end consume
+
+    private def grow(side: Side, x: TypeRepr): TypedHom =
+        x.asType match
+            case '[x] =>
+                val obX: Expr[U[tags.Obj[x]]] = '{ summonInline }
+                side match
+                    case L =>
+                        TypedHomC(
+                          hom = '{ $sym.leftUnit(using $obX).from },
+                          obI = obX,
+                          obO = '{ $sym.tensorOb($sym.unitOb, $obX) }
+                        )
+                    case R =>
+                        TypedHomC(
+                          hom = '{ $sym.rightUnit(using $obX).from },
+                          obI = obX,
+                          obO = '{ $sym.tensorOb($obX, $sym.unitOb) }
+                        )
+                end match
+    end grow
 
     private def hrotate(side: Side, x: TypeRepr, y: TypeRepr, z: TypeRepr): TypedHom =
         x.asType match
