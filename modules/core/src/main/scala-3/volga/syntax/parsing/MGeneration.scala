@@ -8,6 +8,7 @@ import scala.quoted.Type
 import volga.syntax.solve.StageList.VarList
 import volga.syntax.solve.Adaptation
 import volga.syntax.solve.BinHistory
+import volga.syntax.solve.binop.Side
 import scala.compiletime.summonInline
 
 final class MGeneration[H[_, _]: Type, U[_]: Type, q <: Quotes & Singleton](sym: Expr[SymmetricCat[H, U]])(using
@@ -41,13 +42,15 @@ final class MGeneration[H[_, _]: Type, U[_]: Type, q <: Quotes & Singleton](sym:
     private def tensorType(x: TypeRepr, y: TypeRepr): TypeRepr = typing.tensor.appliedTo(List(x, y))
 
     private def generateAdaptTerm(
-        adapt: StageList.Adapt[Tree, Var[q.type], TypeRepr]
-    ): TypedHom = ???
+        adapt: StageList.Adapt[Var[q.type], Tree, TypeRepr]
+    ): TypedHom =
+        val preamble = generateAdaptation(adapt.adaptation, genType(adapt.prev))
+        ???
 
-    private def generateAdaptation(adapt: Adaptation[MndType[q, TypeRepr]]): TypedHom =
-        adapt.view.map(generateForBinHistory).reduce(compose)
+    private def generateAdaptation(adapt: Adaptation[TypeRepr], inT: => TypeRepr): TypedHom =
+        adapt.view.map(generateForBinHistory).reduceOption(compose).getOrElse(identity(inT))
 
-    private def generateForBinHistory(hist: BinHistory[MndType[q, TypeRepr]]): TypedHom = hist match
+    private def generateForBinHistory(hist: BinHistory[TypeRepr]): TypedHom = hist match
         case BinHistory.HRotate(side, l, m, r) => ???
         case BinHistory.HSwap(l, r)            => swap(l, r)
         case BinHistory.HSplit(left, right)    => ???
@@ -83,5 +86,16 @@ final class MGeneration[H[_, _]: Type, U[_]: Type, q <: Quotes & Singleton](sym:
                           obO = '{ $sym.tensorOb($obO, $obI) }
                         )
 
-    private def compose[x: Type, y: Type, z: Type](a: Tree, b: Tree): Expr[H[x, z]] = ???
+    private def hrotate(side: Side, x: TypeRepr, y: TypeRepr, z: TypeRepr): TypedHom = ???
+
+    private def identity(x: TypeRepr): TypedHom =
+        x.asType match
+            case '[x] =>
+                val obX: Expr[U[tags.Obj[x]]] = '{ summonInline }
+                TypedHomC(
+                  hom = '{ $sym.identity(using $obX) },
+                  obI = obX,
+                  obO = obX
+                )
+
 end MGeneration
