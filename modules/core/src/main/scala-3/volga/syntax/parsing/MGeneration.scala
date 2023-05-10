@@ -8,6 +8,7 @@ import scala.quoted.Type
 import volga.syntax.solve.StageList.VarList
 import volga.syntax.solve.Adaptation
 import volga.syntax.solve.BinHistory
+import scala.compiletime.summonInline
 
 final class MGeneration[H[_, _]: Type, U[_]: Type, q <: Quotes & Singleton](sym: Expr[SymmetricCat[H, U]])(using
     val q: q
@@ -48,7 +49,7 @@ final class MGeneration[H[_, _]: Type, U[_]: Type, q <: Quotes & Singleton](sym:
 
     private def generateForBinHistory(hist: BinHistory[MndType[q, TypeRepr]]): TypedHom = hist match
         case BinHistory.HRotate(side, l, m, r) => ???
-        case BinHistory.HSwap(l, r)            => ???
+        case BinHistory.HSwap(l, r)            => swap(l, r)
         case BinHistory.HSplit(left, right)    => ???
         case BinHistory.HConsume(side, v)      => ???
         case BinHistory.HGrow(side, v)         => ???
@@ -68,6 +69,19 @@ final class MGeneration[H[_, _]: Type, U[_]: Type, q <: Quotes & Singleton](sym:
           obO = y.obO
         )
     end compose
+
+    private def swap(x: TypeRepr, y: TypeRepr): TypedHom =
+        x.asType match
+            case '[x] =>
+                y.asType match
+                    case '[y] =>
+                        val obI: Expr[U[tags.Obj[x]]] = '{ summonInline }
+                        val obO: Expr[U[tags.Obj[y]]] = '{ summonInline }
+                        TypedHomC(
+                          hom = '{ $sym.braiding(using $obI, $obO) },
+                          obI = '{ $sym.tensorOb($obI, $obO) },
+                          obO = '{ $sym.tensorOb($obO, $obI) }
+                        )
 
     private def compose[x: Type, y: Type, z: Type](a: Tree, b: Tree): Expr[H[x, z]] = ???
 end MGeneration
