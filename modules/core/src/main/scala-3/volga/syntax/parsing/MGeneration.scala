@@ -93,8 +93,8 @@ final class MGeneration[H[_, _]: Type, U[_]: Type, q <: Quotes & Singleton](sym:
             case '[x] =>
                 y.asType match
                     case '[y] =>
-                        val obI: Expr[U[tags.Obj[x]]] = '{ summonInline }
-                        val obO: Expr[U[tags.Obj[y]]] = '{ summonInline }
+                        val obI = summonOb[x]
+                        val obO = summonOb[y]
                         TypedHomC(
                           hom = '{ $sym.braiding(using $obI, $obO) },
                           obI = '{ $sym.tensorOb($obI, $obO) },

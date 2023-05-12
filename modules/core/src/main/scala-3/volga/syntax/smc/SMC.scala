@@ -129,18 +129,9 @@ class SMCMacro[H[_, _], U[_]](
 
         val stageRepr = stageList.mkString("\n")
 
-        // val xxx = stageList.view.flatMap{x => 
-        //    x.next
-        // }.collect{ 
-        //     case x if x.typ.isEmpty => x.name
-        // }.mkString("\n")
-
-        // if xxx.nonEmpty then
-        //     report.warning(s"untyped vars:\n$xxx")
-
         val adaptedRepr = adapted.mkString("\n")
 
-        val generated = gen.generate(adapted)
+        val generated = gen.generate(adapted).asExprOf[H[I, R]]
 
         val s =
             s"""|success 
@@ -154,7 +145,7 @@ class SMCMacro[H[_, _], U[_]](
 
         report.info(s, expr)
 
-        '{ $sym.dummy[I, R] }
+        generated
     end smcSyntax
 
 end SMCMacro

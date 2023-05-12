@@ -13,7 +13,6 @@ import volga.syntax.smc
 import Nat.{OfInt, Zero, Succ}
 import volga.free.PropOb
 
-
 import volga.free.Nat
 import scala.language.unsafeNulls
 
@@ -38,7 +37,7 @@ val yyy = {
 
     a >>>
         (FreeProp.idInt[1] >< b >< FreeProp.idInt[1]) >>>
-        (FreeProp.idInt[2] >< FreeProp.Swap) >>>
+        (FreeProp.idInt[2] >< FreeProp.swap2) >>>
         (FreeProp.idInt[1] >< c >< FreeProp.idInt[1]) >>>
         d
 }
@@ -50,17 +49,26 @@ val zzz = {
     val y2 = node("Y2", 2, 0)
 
     (x1 >< x2) >>>
-        (FreeProp.idInt[1] >< FreeProp.Swap >< FreeProp.idInt[1]) >>>
+        (FreeProp.idInt[1] >< FreeProp.swap2 >< FreeProp.idInt[1]) >>>
         (y1 >< y2)
 }
 
-def showGraph(l: DAG[0, 0]): Unit =
-    val s     = l.link0[String, Label]
-    val names = s.flatMap((a, b) => Vector(a, b)).map(name => s"[$name]").mkString("\n")
-    val edges = s.map((a, b) => s"$a --> $b").mkString("\n")
-    val uml   = List("@startuml", "!pragma layout smetana", names, edges, "@enduml").mkString("\n")
+def showGraph[I: Nat, J: Nat](l: FreeProp[Label, I, J]): Unit =
+    val ins        = Nat.Vec.tabulate[I, String](i => s"__in__$i")
+    val (outs, s)  = l.link[String, Label](ins)
+    val edges      = s.view.collect {
+        case (s"__in__$i", out) => s"in$i --> [$out]"
+        case (in, out)          => s"[$in] --> [$out]"
+    }
+    val outPuts    = outs.toVector.zipWithIndex.view.collect {
+        case (s"__in__$i", j) => s"in$i --> out$j"
+        case (in, i)          => s"[$in] --> out$i"
+    }
+    val edgeString = (edges ++ outPuts).mkString("\n")
+    val uml        = List("@startuml", "!pragma layout smetana", edgeString, "@enduml").mkString("\n")
 
     showDiagram(uml)
+end showGraph
 
 def showDiagram(uml: String): Unit =
     val png = ByteArrayOutputStream();
@@ -80,10 +88,10 @@ def showDiagram(uml: String): Unit =
 end showDiagram
 
 @main def DiagTest(): Unit =
-    showGraph(xxx >< yyy >< zzz)
+    showGraph(xxx >< yyy >< zzz >< node("www", 2, 2))
 end DiagTest
 
-@main def DiagTest1(): Unit = 
+@main def DiagTest1(): Unit =
     val aNode = node("a", 0, 1)
     val bNode = node("b", 1, 0)
     val cNode = node("c", 1, 3)
@@ -92,11 +100,11 @@ end DiagTest
 
     val prop = smc.syntax[Diag, PropOb]
 
-    
     val expIdent: DAG[1, 1] = prop.of1((x: V1) => x)
     val expApply: DAG[1, 0] = prop.of1((v: V1) => bNode(v))
     val expSwap: DAG[2, 2]  = prop.of2((a: V1, b: V1) => (b, a))
+    val expSwap2: DAG[3, 3] = prop.of3((a: V1, b: V1, c: V1) => (b, a, c))
 
-    // showDiagram(expIdent)
-    ()
+    showGraph(expSwap)
+
 end DiagTest1
