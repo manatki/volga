@@ -106,7 +106,7 @@ class SMCMacro[H[_, _], U[_]](
     import q.reflect.*
 
     given MonadicTyping[q.type] with
-        def ident  = TypeRepr.of[U[tags.One]]
+        def one  = TypeRepr.of[U[tags.One]]
         def tensor = TypeRepr.of[[a, b] =>> U[tags.Tensor[a, b]]]
 
     val parse = MParsing()

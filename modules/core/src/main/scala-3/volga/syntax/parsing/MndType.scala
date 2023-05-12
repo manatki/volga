@@ -6,7 +6,7 @@ import volga.syntax.solve.PMagma
 
 trait MonadicTyping[q <: Quotes](using val q: q):
     import q.reflect.*
-    def ident: TypeRepr
+    def one: TypeRepr
     def tensor: TypeRepr
 
 object MndType:
@@ -17,7 +17,7 @@ object MndType:
     given [q <: Quotes & Singleton](using q: q, typing: MonadicTyping[q.type]): PMagma[MndType[q, q.reflect.TypeRepr]] =
         import q.reflect.*
         new:
-            def empty                                = typing.ident
+            def empty                                = typing.one
             extension (x: MndType[q, TypeRepr])
                 def combine(y: MndType[q, TypeRepr]) = AppliedType(typing.tensor, List(x, y))
 end MndType

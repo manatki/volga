@@ -17,7 +17,7 @@ object VError:
         def report()         = rep.error(message)
         def reportAndAbort() = rep.errorAndAbort(message)
 
-    def atTree(using q: Quotes)(tree: q.reflect.Tree)(s: String): VError = new:
+    def atTree(using q: Quotes)(s: String)(tree: q.reflect.Tree): VError = new:
         def report()         = rep.error(s"$s\n $tree", tree.pos)
         def reportAndAbort() = rep.errorAndAbort(s"$s\n $tree", tree.pos)
 

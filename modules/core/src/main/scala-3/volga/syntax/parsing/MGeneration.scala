@@ -39,7 +39,8 @@ final class MGeneration[H[_, _]: Type, U[_]: Type, q <: Quotes & Singleton](sym:
         if v.goThrough.isEmpty then joinType(v.effective)
         else tensorType(joinType(v.effective), joinType(v.goThrough))
 
-    private def joinType(v: Vector[Var[q.type]]): TypeRepr = v.view.map(_.requireTyp).reduce(tensorType)
+    private def joinType(v: Vector[Var[q.type]]): TypeRepr =
+        v.view.map(_.requireTyp).reduceOption(tensorType).getOrElse(typing.one)
 
     private def tensorType(x: TypeRepr, y: TypeRepr): TypeRepr = typing.tensor.appliedTo(List(x, y))
 
@@ -100,10 +101,12 @@ final class MGeneration[H[_, _]: Type, U[_]: Type, q <: Quotes & Singleton](sym:
                           obO = '{ $sym.tensorOb($obO, $obI) }
                         )
 
+    private def summonOb[X: Type]: Expr[U[tags.Obj[X]]] = '{ summonInline[U[tags.Obj[X]]] }
+
     private def identity(x: TypeRepr): TypedHom =
         x.asType match
             case '[x] =>
-                val obX: Expr[U[tags.Obj[x]]] = '{ summonInline }
+                val obX = summonOb[x]
                 TypedHomC(
                   hom = '{ $sym.identity(using $obX) },
                   obI = obX,
@@ -113,7 +116,7 @@ final class MGeneration[H[_, _]: Type, U[_]: Type, q <: Quotes & Singleton](sym:
     private def consume(side: Side, x: TypeRepr): TypedHom =
         x.asType match
             case '[x] =>
-                val obX: Expr[U[tags.Obj[x]]] = '{ summonInline }
+                val obX = summonOb[x]
                 side match
                     case L =>
                         TypedHomC(
@@ -133,7 +136,7 @@ final class MGeneration[H[_, _]: Type, U[_]: Type, q <: Quotes & Singleton](sym:
     private def grow(side: Side, x: TypeRepr): TypedHom =
         x.asType match
             case '[x] =>
-                val obX: Expr[U[tags.Obj[x]]] = '{ summonInline }
+                val obX = summonOb[x]
                 side match
                     case L =>
                         TypedHomC(
@@ -179,9 +182,9 @@ final class MGeneration[H[_, _]: Type, U[_]: Type, q <: Quotes & Singleton](sym:
                     case '[y] =>
                         z.asType match
                             case '[z] =>
-                                val obX: Expr[U[tags.Obj[x]]] = '{ summonInline }
-                                val obY: Expr[U[tags.Obj[y]]] = '{ summonInline }
-                                val obZ: Expr[U[tags.Obj[z]]] = '{ summonInline }
+                                val obX = summonOb[x]
+                                val obY = summonOb[y]
+                                val obZ = summonOb[z]
                                 side match
                                     case L =>
                                         TypedHomC(
@@ -219,8 +222,8 @@ final class MGeneration[H[_, _]: Type, U[_]: Type, q <: Quotes & Singleton](sym:
                     case '[o] =>
                         TypedHomC(
                           hom = tree.asExpr.asExprOf[H[i, o]],
-                          obI = '{ summonInline[U[tags.Obj[i]]] },
-                          obO = '{ summonInline[U[tags.Obj[o]]] }
+                          obI = summonOb[i],
+                          obO = summonOb[o]
                         )
 
 end MGeneration

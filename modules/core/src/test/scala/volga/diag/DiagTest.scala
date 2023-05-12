@@ -9,7 +9,10 @@ import javax.swing.JLabel
 import javax.swing.WindowConstants
 import java.awt.Toolkit
 import volga.free.Nat
+import volga.syntax.smc
 import Nat.{OfInt, Zero, Succ}
+import volga.free.PropOb
+
 
 import volga.free.Nat
 import scala.language.unsafeNulls
@@ -51,7 +54,7 @@ val zzz = {
         (y1 >< y2)
 }
 
-def showGraph(l: FreeProp[Label, Zero, Zero]): Unit =
+def showGraph(l: DAG[0, 0]): Unit =
     val s     = l.link0[String, Label]
     val names = s.flatMap((a, b) => Vector(a, b)).map(name => s"[$name]").mkString("\n")
     val edges = s.map((a, b) => s"$a --> $b").mkString("\n")
@@ -79,3 +82,21 @@ end showDiagram
 @main def DiagTest(): Unit =
     showGraph(xxx >< yyy >< zzz)
 end DiagTest
+
+@main def DiagTest1(): Unit = 
+    val aNode = node("a", 0, 1)
+    val bNode = node("b", 1, 0)
+    val cNode = node("c", 1, 3)
+
+    type V1 = smc.V[Nat.`1`]
+
+    val prop = smc.syntax[Diag, PropOb]
+
+    
+    val expIdent: DAG[1, 1] = prop.of1((x: V1) => x)
+    val expApply: DAG[1, 0] = prop.of1((v: V1) => bNode(v))
+    val expSwap: DAG[2, 2]  = prop.of2((a: V1, b: V1) => (b, a))
+
+    // showDiagram(expIdent)
+    ()
+end DiagTest1

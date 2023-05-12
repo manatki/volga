@@ -16,25 +16,26 @@ class SyntaxTest extends munit.FunSuite:
         val bNode = node("b", 1, 0)
         val cNode = node("c", 1, 3)
 
-        
-        val exp0: DAG[0, 2] = prop.of0 {
-            val x         = aNode()
-            val (u, v, w) = cNode(x)
-            bNode(v)
-            (w, u)
-        }       
+        val expIdent: DAG[1, 1] = prop.of1((x: V1) => x)
+        val expApply: DAG[1, 0] = prop.of1((v: V1) => bNode(v))
+        val expSwap: DAG[2, 2]  = prop.of2((a: V1, b: V1) => (b, a))
 
-        val exp1: DAG[1, 1] = prop.of1 { (a: V1) =>
-            bNode(a)
-            aNode()
-        }
+        // val exp0: DAG[0, 2] = prop.of0 {
+        //     val x         = aNode()
+        //     val (u, v, w) = cNode(x)
+        //     bNode(v)
+        //     (w, u)
+        // }
 
+        // val exp1: DAG[1, 1] = prop.of1 { (a: V1) =>
+        //     bNode(a)
+        //     aNode()
+        // }
 
-        val exp2: DAG[2, 1] = prop.of2 { (a: V1, b: V1) =>
-            bNode(a)
-            bNode(b)
-            aNode()
-        }
+        // val exp2: DAG[2, 1] = prop.of2 { (a: V1, b: V1) =>
+        //     bNode(a)
+        //     bNode(b)
+        //     aNode()
+        // }
 
-        
 end SyntaxTest
