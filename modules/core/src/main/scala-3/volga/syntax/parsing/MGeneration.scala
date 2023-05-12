@@ -28,12 +28,17 @@ final class MGeneration[H[_, _]: Type, U[_]: Type, q <: Quotes & Singleton](sym:
     )(using val I: Type[In], val O: Type[Out]):
         type I = In
         type O = Out
+
+        def show = s"${hom.show} : ${Type.show[In]} --> ${Type.show[Out]}"
     end TypedHomC
 
     type TypedHom = TypedHomC[?, ?]
 
     def generate(terms: StageList.Adapted[Var[q.type], Tree, MndType[q, TypeRepr]]): Expr[Any] =
-        terms.view.map(generateAdaptTerm).reduce(compose).hom
+        val exp = terms.view.map(generateAdaptTerm).reduce(andThen).hom
+        report.info(s"generated: ${exp.show} of type ${exp.asTerm.tpe.dealias.widen.show}")
+
+        exp
 
     private def genType(v: VarList[Var[q.type]]): TypeRepr =
         if v.goThrough.isEmpty then joinType(v.effective)
@@ -58,12 +63,12 @@ final class MGeneration[H[_, _]: Type, U[_]: Type, q <: Quotes & Singleton](sym:
                         val goThrough = identity(joinType(adapt.next.goThrough))
                         split(termHom, goThrough)
                     else termHom
-                compose(preamble, mainPart)
+                andThen(preamble, mainPart)
         end match
     end generateAdaptTerm
 
     private def generateAdaptation(adapt: Adaptation[TypeRepr], inT: => TypeRepr): TypedHom =
-        adapt.view.map(generateForBinHistory).reduceOption(compose).getOrElse(identity(inT))
+        adapt.view.map(generateForBinHistory).reduceOption(andThen).getOrElse(identity(inT))
 
     private def generateForBinHistory(hist: BinHistory[TypeRepr]): TypedHom = hist match
         case BinHistory.HRotate(side, l, m, r) => hrotate(side, l, m, r)
@@ -72,21 +77,17 @@ final class MGeneration[H[_, _]: Type, U[_]: Type, q <: Quotes & Singleton](sym:
         case BinHistory.HConsume(side, v)      => consume(side, v)
         case BinHistory.HGrow(side, v)         => grow(side, v)
 
-    private def compose(x: TypedHom, y: TypedHom): TypedHom =
-        type A = x.I
-        type B = y.I
-        type C = y.O
+    private def andThen[A, B, B1, C](x: TypedHomC[A, B], y: TypedHomC[B1, C]): TypedHomC[A, C] =
         given Type[A]            = x.I
-        given Type[B]            = y.I
+        given Type[B]            = x.O
         given Type[C]            = y.O
-        val xexpr                = x.hom.asExprOf[H[A, B]]
-        val yexpr: Expr[H[B, C]] = y.hom
+        val yexpr: Expr[H[B, C]] = y.hom.asExprOf[H[B, C]]
         TypedHomC[A, C](
-          hom = '{ $sym.compose[A, B, C](${ y.hom }, $xexpr)(using ${ x.obI }, ${ y.obI }, ${ y.obO }) },
+          hom = '{ $sym.compose[A, B, C]($yexpr, ${ x.hom })(using ${ x.obI }, ${ x.obO }, ${ y.obO }) },
           obI = x.obI,
           obO = y.obO
         )
-    end compose
+    end andThen
 
     private def swap(x: TypeRepr, y: TypeRepr): TypedHom =
         x.asType match
@@ -96,7 +97,7 @@ final class MGeneration[H[_, _]: Type, U[_]: Type, q <: Quotes & Singleton](sym:
                         val obI = summonOb[x]
                         val obO = summonOb[y]
                         TypedHomC(
-                          hom = '{ $sym.braiding(using $obI, $obO) },
+                          hom = '{ $sym.braiding[x, y](using $obI, $obO) },
                           obI = '{ $sym.tensorOb($obI, $obO) },
                           obO = '{ $sym.tensorOb($obO, $obI) }
                         )
@@ -140,13 +141,13 @@ final class MGeneration[H[_, _]: Type, U[_]: Type, q <: Quotes & Singleton](sym:
                 side match
                     case L =>
                         TypedHomC(
-                          hom = '{ $sym.leftUnit(using $obX).from },
+                          hom = '{ $sym.leftUnit[x](using $obX).from },
                           obI = obX,
                           obO = '{ $sym.tensorOb($sym.unitOb, $obX) }
                         )
                     case R =>
                         TypedHomC(
-                          hom = '{ $sym.rightUnit(using $obX).from },
+                          hom = '{ $sym.rightUnit[x](using $obX).from },
                           obI = obX,
                           obO = '{ $sym.tensorOb($obX, $sym.unitOb) }
                         )
@@ -158,45 +159,47 @@ final class MGeneration[H[_, _]: Type, U[_]: Type, q <: Quotes & Singleton](sym:
         val rightTerm = generateAdaptation(right.history, right.start)
         split(leftTerm, rightTerm)
 
-    private def split(left: TypedHom, right: TypedHom): TypedHom =
-        import left.given
-        import right.given
-        TypedHomC(
+    private def split[A, B, C, D](left: TypedHomC[A, B], right: TypedHomC[C, D]): TypedHomC[A x C, B x D] =
+        given Type[A] = left.I
+        given Type[B] = left.O
+        given Type[C] = right.I
+        given Type[D] = right.O
+        TypedHomC[A x C, B x D](
           hom = '{
-              $sym.tensor(${ left.hom }, ${ right.hom })(using
+              $sym.tensor[A, B, C, D](${ left.hom }, ${ right.hom })(using
                 ${ left.obI },
                 ${ left.obO },
                 ${ right.obI },
                 ${ right.obO }
               )
           },
-          obI = '{ $sym.tensorOb(${ left.obI }, ${ right.obI }) },
-          obO = '{ $sym.tensorOb(${ left.obO }, ${ right.obO }) }
+          obI = '{ $sym.tensorOb[A, C](using ${ left.obI }, ${ right.obI }) },
+          obO = '{ $sym.tensorOb[B, D](using ${ left.obO }, ${ right.obO }) }
         )
     end split
 
-    private def hrotate(side: Side, x: TypeRepr, y: TypeRepr, z: TypeRepr): TypedHom =
-        x.asType match
-            case '[x] =>
-                y.asType match
-                    case '[y] =>
-                        z.asType match
-                            case '[z] =>
-                                val obX = summonOb[x]
-                                val obY = summonOb[y]
-                                val obZ = summonOb[z]
+    private def hrotate(side: Side, a: TypeRepr, b: TypeRepr, c: TypeRepr): TypedHom =
+        a.asType match
+            case '[a] =>
+                b.asType match
+                    case '[b] =>
+                        c.asType match
+                            case '[c] =>
+                                val obA = summonOb[a]
+                                val obB = summonOb[b]
+                                val obC = summonOb[c]
                                 side match
                                     case L =>
                                         TypedHomC(
-                                          hom = '{ $sym.assocLeft(using $obX, $obY, $obZ) },
-                                          obI = '{ $sym.tensorOb($obX, $sym.tensorOb($obY, $obZ)) },
-                                          obO = '{ $sym.tensorOb($sym.tensorOb($obX, $obY), $obZ) }
+                                          hom = '{ $sym.assocLeft[a, b, c](using $obA, $obB, $obC) },
+                                          obI = '{ $sym.tensorOb($obA, $sym.tensorOb($obB, $obC)) },
+                                          obO = '{ $sym.tensorOb($sym.tensorOb($obA, $obB), $obC) }
                                         )
                                     case R =>
                                         TypedHomC(
-                                          hom = '{ $sym.assocRight(using $obX, $obY, $obZ) },
-                                          obI = '{ $sym.tensorOb($sym.tensorOb($obX, $obY), $obZ) },
-                                          obO = '{ $sym.tensorOb($obX, $sym.tensorOb($obY, $obZ)) }
+                                          hom = '{ $sym.assocRight[a, b, c](using $obA, $obB, $obC) },
+                                          obI = '{ $sym.tensorOb($sym.tensorOb($obA, $obB), $obC) },
+                                          obO = '{ $sym.tensorOb($obA, $sym.tensorOb($obB, $obC)) }
                                         )
                                 end match
     end hrotate

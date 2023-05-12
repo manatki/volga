@@ -100,6 +100,7 @@ end DiagTest
 
     val prop = smc.syntax[Diag, PropOb]
 
+
     val expIdent: DAG[1, 1] = prop.of1((x: V1) => x)
     val expApply: DAG[1, 0] = prop.of1((v: V1) => bNode(v))
     val expSwap: DAG[2, 2]  = prop.of2((a: V1, b: V1) => (b, a))
@@ -107,4 +108,3 @@ end DiagTest
 
     showGraph(expSwap)
 
-end DiagTest1
