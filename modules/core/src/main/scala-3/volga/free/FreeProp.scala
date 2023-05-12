@@ -24,11 +24,17 @@ enum FreeProp[+H[_, _], A, B]:
         C: Nat[C],
         D: Nat[D]
     )                                                                                        extends FreeProp[H, Nat.Plus[A, C], Nat.Plus[B, D]]
-    case Swap                                                                                extends FreeProp[Nothing, Nat.`2`, Nat.`2`]
+    case Swap[A, B](natA: Nat[A], natB: Nat[B])                                              extends FreeProp[Nothing, Nat.Plus[A, B], Nat.Plus[B, A]]
 
     def link0[H_, H1[x, y] >: H[x, y] <: H_](using A0: A =:= Nat.Zero, B0: B =:= Nat.Zero): Vector[(H_, H_)] =
         val h0 = A0.liftCo[FreeProp[H, _, B]].andThen(B0.liftCo[FreeProp[H, Nat.Zero, _]])(this)
         FreeProp.link[Nat.Zero, Nat.Zero, H_, H1](h0, EmptyTuple)._2
+
+    def link[H_, H1[x, y] >: H[x, y] <: H_](using Nat[A], Nat[B])(
+        ins: Nat.Vec[A, H_]
+    ): (Nat.Vec[B, H_], Vector[(H_, H_)]) =
+        FreeProp.link[A, B, H_, H1](this, ins)
+
 end FreeProp
 
 object FreeProp:
@@ -36,6 +42,10 @@ object FreeProp:
 
     inline def id[A, B](using inline proof: => A =:= B): FreeProp[Nothing, A, B] =
         Nat.erase(proof).substituteCo(Id())
+
+    val swap2: FreeProp[Nothing, Nat.`2`, Nat.`2`] =
+        val one = Nat.Succ(Nat.Zero())
+        Swap(one, one)
 
     given propCat[H[_, _]]: SymmetricCat[FreeProp[H, _, _], PropOb] with
         import Nat.{Plus, +}
@@ -49,7 +59,7 @@ object FreeProp:
 
         override def leftUnit[A](using PropOb[Obj[A]]): Plus[Nat.Zero, A] <--> A = idIso(using Nat.lzero)
 
-        override def braiding[A: Nat, B: Nat]: (A x B) --> (B x A) = id(using Nat.comm)
+        override def braiding[A: Nat, B: Nat]: (A x B) --> (B x A) = Swap(summon, summon)
 
         override def identity[A: Nat]: A --> A = id
 
@@ -69,10 +79,9 @@ object FreeProp:
     ): (Nat.Vec[M, H_], Vector[(H_, H_)]) =
         p match
             case Id()                                                              => (inbound, Vector.empty)
-            case Swap                                                              =>
-                val (x, y) = Nat.teq[N, Nat.`2`].liftCo[Nat.Vec[_, H_]](inbound)
-                val res    = Nat.teq[Nat.`2`, M].liftCo[Nat.Vec[_, H_]]((y, x))
-                (res, Vector.empty)
+            case Swap(given Nat[a], given Nat[b])                                  =>
+                val (va, vb) = Nat.Vec.split[a, b, H_](inbound)
+                (vb.concat(va), Vector.empty)
             case Embed(h)                                                          =>
                 val links    = inbound.toVector.map((_, h))
                 val outbound = Nat.Vec.replicate[M, H_](h)

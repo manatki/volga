@@ -14,6 +14,7 @@ import scala.language.implicitConversions
 import volga.syntax.solve.BinOp
 import volga.util.collections.*
 import volga.syntax.parsing.Var
+import scala.quoted.Quotes
 
 object StageList:
     import Pos.*
@@ -23,7 +24,9 @@ object StageList:
 
     opaque type StageList[+X] <: Vector[X] = Vector[X]
 
-    case class Basic[+V, +T](prev: Vector[V], next: Vector[V], binding: Option[T])
+    case class Binding[+V, +T](term: T, output: Vector[V])
+
+    case class Basic[+V, +T](prev: Vector[V], next: Vector[V], binding: Option[Binding[V, T]])
     case class VarList[+V](effective: Vector[V], goThrough: Vector[V]):
         def bin: Bin[V] =
             val effectiveBin = Bin.fromElements(effective)
@@ -31,23 +34,35 @@ object StageList:
             if goThrough.isEmpty then effectiveBin
             else Bin.Branch(effectiveBin, goThroughBin)
 
-    case class Align[+V, +T](prev: VarList[V], next: VarList[V], binding: Option[T])
+    case class Align[+V, +T](prev: VarList[V], next: VarList[V], binding: Option[Binding[V, T]])
     final case class Adapt[+V, +T, +R](
         prev: VarList[V],
         next: VarList[V],
         adaptation: Adaptation[R] = Vector.empty,
-        binding: Option[T] = None
+        binding: Option[Binding[V, T]] = None
     )
 
+    trait NoTerm:
+        def term = None
+
     enum Err[+V, +T] extends RuntimeException:
-        case UnknownVar(v: V, t: Option[T])
-        case UnusedVar(v: V)
+        case UnknownVar(v: V, term: Option[T])
+        case UnusedVar(v: V) extends Err[V, T], NoTerm
         case Other(message: String, term: Option[T])
 
+        def term: Option[T]
+
         override def getMessage = this match
-            case UnknownVar(v, t) => s"unknown variable $v in $t"
+            case UnknownVar(v, t) => s"unknown variable $v"
             case UnusedVar(v)     => s"unused variable $v"
-            case Other(m, t)      => s"$m in $t"
+            case Other(m, t)      => s"$m"
+
+        def reportAndAbort(using q: Quotes)(using ev: T <:< q.reflect.Tree): Nothing =
+            term match
+                case Some(t) => q.reflect.report.errorAndAbort(getMessage, ev(t).pos)
+                case None    => q.reflect.report.errorAndAbort(getMessage)
+
+    end Err
 
     type Vars[+V, +T]     = StageList[Basic[V, T]]
     type Aligned[+V, +T]  = StageList[Align[V, T]]
@@ -55,8 +70,8 @@ object StageList:
 
     private def toStage[S, T](prev: Vector[S], term: STerm[S, T] & Mid): (Vector[S], Basic[S, T]) =
         term match
-            case Assignment(recs, app) => (recs, Basic(prev, app.args, Some(term.applied)))
-            case Application(app)      => (Vector(), Basic(prev, app.args, Some(term.applied)))
+            case Assignment(recs, app) => (recs, Basic(prev, app.args, Some(Binding(term.applied, recs))))
+            case Application(app)      => (Vector(), Basic(prev, app.args, Some(Binding(term.applied, Vector()))))
 
     def fromTerms[S, T](
         input: Vector[S],
@@ -70,6 +85,13 @@ object StageList:
                 val (lastestInput, lastStage) = toStage(lastInput, app)
                 stages :+ lastStage :+ Basic(lastestInput, Vector(), None)
     end fromTerms
+
+    extension [T, V](list: Vars[V, T])
+        def withAdaptation[D](using V: Variable[V, D]): Either[Err[V, T], Adapted[V, T, D]] =
+            for
+                aligned <- doAlign(list)
+                adapted <- aligned.mapErr(histWithOp)
+            yield adapted
 
     private def history[V, T, D](align: Align[V, T])(using
         V: Variable[V, D]
@@ -86,7 +108,7 @@ object StageList:
 
     def histWithOp[V, T, D](align: Align[V, T])(using Variable[V, D]): Either[Err[V, T], Adapt[V, T, D]] =
         history(align).fold(
-          message => Left(Err.Other(message, align.binding)),
+          message => Left(Err.Other(message, align.binding.map(_.term))),
           adaptation => Right(Adapt(align.prev, align.next, adaptation, align.binding))
         )
 
@@ -98,10 +120,11 @@ object StageList:
         val Basic(prev, next, bind) = list
         val full                    = V.toMap(preserved) ++ V.toMap(prev)
         val unknown                 = V.toMap(next) -- full.keys
+        def replenish(v: V)         = V.replenish(v, full(V.label(v)))
         if unknown.isEmpty then
-            val keep = (full -- next.view.map(V.label)).values.toVector
-            Right((keep, Align(VarList(prev, preserved), VarList(next, keep), bind)))
-        else Left(Err.UnknownVar(unknown.values.head, bind))
+            val keep = (full -- next.view.map(V.label)).view.values.map(replenish).toVector
+            Right((keep, Align(VarList(prev, preserved), VarList(next.map(replenish), keep), bind)))
+        else Left(Err.UnknownVar(unknown.values.head, bind.map(_.term)))
     end alignSingle
 
     private def doAlign[V, T](vars: Vars[V, T])(using V: Labeled[V]): Either[Err[V, T], Aligned[V, T]] =
@@ -110,12 +133,5 @@ object StageList:
             (result, aligned) = alignRes
             _                <- Either.cond(result.isEmpty, (), Err.UnusedVar(result.head))
         yield aligned
-
-    extension [T, V](list: Vars[V, T])
-        def withAdaptation[D](using V: Variable[V, D]): Either[Err[V, T], Adapted[V, T, D]] =
-            for
-                aligned <- doAlign(list)
-                adapted <- aligned.mapErr(histWithOp)
-            yield adapted
 
 end StageList

@@ -11,12 +11,40 @@ import volga.syntax.parsing.VError
 import volga.syntax.parsing.Pos.{Mid, End, Tupling}
 import volga.syntax.parsing.STerm
 import volga.syntax.parsing.App
+import volga.syntax.smc.SyApp
 
 final class MParsing[q <: Quotes & Singleton](using val q: q):
     import q.reflect.*
     import Pos.*
     val vars = Vars[q.type]()
-    import vars.*
+
+    val SyAppRepr = TypeRepr.of[SyApp[?, ?]]
+
+    type Parsed = (Vector[Var[q.type]], Vector[PMid], PEnd)
+
+    @tailrec def parseBlock(block: Tree): Either[VError, Parsed] = block match
+        case CFBlock(body)          => parseBlock(body)
+        case Block(Nil, res: Block) => parseBlock(res)
+        case InlineTerm(t)          => parseBlock(t)
+        case Lambda(valDefs, body)  => parseWithVals(valDefs, body)
+        case body                   => parseWithVals(Nil, body)
+
+    private def parseWithVals(valDefs: List[ValDef], block: Tree): Either[VError, Parsed] =
+        val vs = valDefs.toVector.map:
+            case ValDef(name, tpe, _) => vars.varOf(name, tpe)
+
+        block match
+            case Block(mids, res) =>
+                for
+                    midTerms     <- VError.traverse(mids, asMidSTerm)(midTermErr)
+                    detupledMids <- detuple(midTerms)
+                    endTerm      <- VError.applyOr(res)(asEndTerm)(endTermErr(res))
+                yield (vs, detupledMids, endTerm)
+            case single           =>
+                for term <- VError.applyOr(single)(asEndTerm)(endTermErr(single))
+                yield (vs, Vector.empty, term)
+        end match
+    end parseWithVals
 
     private type PMid      = STerm[Var[q], Tree] & Pos.Mid
     private type PMidTup   = STerm[Var[q], Tree] & (Pos.Mid | Pos.Tupling)
@@ -25,39 +53,30 @@ final class MParsing[q <: Quotes & Singleton](using val q: q):
     private type PApp      = App[Var[q], Tree]
 
     val InlineTerm: Inlined =\> Term =
-        case Inlined(None, Nil, t) => t
+        case Inlined(_, _, t) => t
 
-    val CFBody: Term =\> Term =
-        case Block(Nil, t) => t
-        case t             => t
-
-    val CFBlock: Tree =\> Tree =
-        case InlineTerm(
-              Block(
-                List(DefDef(nameD, _, _, Some(InlineTerm(CFBody(t))))),
-                Closure(Ident(nameR), None)
-              )
-            ) if nameD == nameR =>
-            t
-    end CFBlock
+    private val CFBlock: Tree =\> Tree =
+        case Lambda(List(p), t) if p.tpt.tpe <:< SyAppRepr => t
 
     val asMidSTerm: Tree =\> PMidTup =
         case asAnywhereTerm(t)                                                                  => t
         case ValDef(name, t, Some(asApplication(app)))                                          =>
-            STerm.Assignment(Vector(varOf(name, t)), app)
+            STerm.Assignment(Vector(vars.varOf(name, t)), app)
         case ValDef(name, _, Some(Match(Typed(asApplication(app), t @ TupleRepr(i)), List(_)))) =>
-            STerm.Tupled(varNamed(name), i, app)
+            STerm.Tupled(vars.varNamed(name), i, app)
         case ValDef(name, t, Some(Select(Ident(tname), s"_${OfInt(i)}")))                       =>
-            STerm.Untupling(varNamed(tname), varOf(name, t), i - 1)
+            STerm.Untupling(vars.varNamed(tname), vars.varOf(name, t), i - 1)
     end asMidSTerm
 
     val asEndTerm: Tree =\> PEnd =
-        case Typed(Ident(name), _)                       => STerm.Result(Vector(varNamed(name)))
-        case Apply(TupleApp(()), ident.travector(names)) => STerm.Result(names.map(varNamed(_)))
+        case asAnywhereTerm(t)                           => t
+        case Typed(Ident(name), _)                       => STerm.Result(Vector(vars.varNamed(name)))
+        case Ident(name)                                 => STerm.Result(Vector(vars.varNamed(name)))
+        case Apply(TupleApp(()), ident.travector(names)) => STerm.Result(names.map(vars.varNamed))
 
     val asApplication: Tree =\> PApp =
         case Apply(Apply(_, List(t)), ident.travector(names)) =>
-            App(t, names.map(varNamed(_)))
+            App(t, names.map(vars.varNamed))
 
     val ident: Term =\> String =
         case Ident(name) => name
@@ -89,8 +108,8 @@ final class MParsing[q <: Quotes & Singleton](using val q: q):
                 case _    => None
     end TupleRepr
 
-    val midTermErr = VError.atTree(_: Tree)("error while parsing mid term")
-    val endTermErr = VError.atTree(_: Tree)("error while parsing end term")
+    val midTermErr = VError.atTree("error while parsing mid term")
+    val endTermErr = VError.atTree("error while parsing end term")
 
     private def fullVector[A] = ({ case Some(a) => a }: Option[A] =\> A).travector
 
@@ -126,13 +145,11 @@ final class MParsing[q <: Quotes & Singleton](using val q: q):
         def end: Either[VError, Vector[PMid]] =
             if tuplings.isEmpty then Right(result)
             else
-                Left(() =>
-                    tuplings.values.foreach {
-                        case TuplingState(Some(App(tree, _)), _, _) =>
-                            q.reflect.report.error("incorrect tupling", tree.pos)
-                        case _                                      =>
-                    }
-                )
+                val errs = tuplings.values.collect:
+                    case TuplingState(Some(App(tree, _)), _, _) =>
+                        VError.atTree("incorrect tupling")(tree)
+
+                Left(errs.reduce(_ ++ _))
 
     end DetupleState
 

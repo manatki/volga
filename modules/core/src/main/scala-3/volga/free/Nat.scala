@@ -21,7 +21,7 @@ object Nat:
         case Zero     => x
         case Succ[y1] => Succ[Plus[x, y1]]
 
-    type `0` = Zero    
+    type `0` = Zero
     type `1` = Succ[Zero]
     type `2` = Succ[Succ[Zero]]
 
@@ -37,7 +37,6 @@ object Nat:
     infix type +[A, B] = Plus[A, B]
 
     def rzero[n]: Plus[n, Zero] =:= n = <:<.refl
-
 
     inline def erase[A, B](inline proof: => A =:= B): A =:= B = <:<.refl.asInstanceOf[A =:= B]
 
@@ -77,7 +76,7 @@ object Nat:
         case Nat.Succ[n] => A *: Vec[n, A]
 
     extension [N: Nat, A](v: Vec[N, A])
-        def toVector: Vector[A] = Nat[N] match
+        def toVector: Vector[A]                                                 = Nat[N] match
             case Zero()             => Vector.empty
             case Succ(given Nat[n]) =>
                 teq[N, Succ[n]].liftCo[Vec[_, A]](v) match
@@ -105,6 +104,10 @@ object Nat:
         def replicate[N: Nat, A](a: A): Vec[N, A] = Nat[N] match
             case Zero()             => EmptyTuple
             case Succ(given Nat[n]) => teq[Succ[n], N].liftCo[Vec[_, A]](a *: replicate(a))
+
+        def tabulate[N: Nat, A](f: Int => A, start: Int = 0): Vec[N, A] = Nat[N] match
+            case Zero()             => EmptyTuple
+            case Succ(given Nat[n]) => teq[Succ[n], N].liftCo[Vec[_, A]](f(start) *: tabulate(f, start + 1))
 
         @tailrec private def split1[N: Nat, M, K, R: Nat, A](
             v: Vec[Plus[M, N], A],

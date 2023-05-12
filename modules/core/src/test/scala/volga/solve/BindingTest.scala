@@ -2,7 +2,7 @@ package volga.solve
 
 import volga.syntax.solve.StageList
 import volga.syntax.parsing.{STerm, App}
-import volga.syntax.solve.StageList.{Basic, Adapt, VarList}
+import volga.syntax.solve.StageList.{Basic, Adapt, VarList, Binding}
 import volga.syntax.solve.BinHistory as BH
 import scala.annotation.threadUnsafe
 import volga.syntax.solve.Bin
@@ -109,7 +109,11 @@ class BindingTest extends munit.FunSuite:
         )("a", "c")
             .checkAdaptations()
             .checkList(noHistory = true)(
-              Adapt(VarList(Vector("a", "b"), Vector()), VarList(Vector("b"), Vector("a")), binding = Some("use-b")),
+              Adapt(
+                VarList(Vector("a", "b"), Vector()),
+                VarList(Vector("b"), Vector("a")),
+                binding = Some(Binding("use-b", Vector("c")))
+              ),
               Adapt(VarList(Vector("c"), Vector("a")), VarList(Vector("a", "c"), Vector()))
             )
 
@@ -122,7 +126,7 @@ class BindingTest extends munit.FunSuite:
               Adapt(
                 VarList(Vector("a", "b", "c"), Vector()),
                 VarList(Vector("c", "a"), Vector("b")),
-                binding = Some("[c, a] -> [d, e]")
+                binding = Some(Binding("[c, a] -> [d, e]", Vector("d", "e")))
               ),
               Adapt(VarList(Vector("d", "e"), Vector("b")), VarList(Vector("b", "e", "d"), Vector()))
             )
@@ -137,12 +141,12 @@ class BindingTest extends munit.FunSuite:
               Adapt(
                 VarList(Vector("a", "b", "c"), Vector()),
                 VarList(Vector("c"), Vector("a", "b")),
-                binding = Some("[c] -> [d, e]")
+                binding = Some(Binding("[c] -> [d, e]", Vector("d", "e")))
               ),
               Adapt(
                 VarList(Vector("d", "e"), Vector("a", "b")),
                 VarList(Vector("e", "a"), Vector("b", "d")),
-                binding = Some("[e, a] -> [f, g, h]")
+                binding = Some(Binding("[e, a] -> [f, g, h]", Vector("f", "g", "h")))
               ),
               Adapt(
                 VarList(Vector("f", "g", "h"), Vector("b", "d")),
@@ -179,7 +183,7 @@ class BindingTest extends munit.FunSuite:
 
     test("to through many levels unknown"):
         assertEquals(
-            syntax()(
+          syntax()(
             mid1()("b", "c"),
             mid1("c")("d", "e"),
             mid1("d")(),
@@ -188,8 +192,8 @@ class BindingTest extends munit.FunSuite:
             mid1("b", "h")(),
             mid1("x", "g")(),
             mid1("f", "y")("z")
-            )("z").error,
-            StageList.Err.UnknownVar("a", Some("[e, a] -> [f, g, h]"))
+          )("z").error,
+          StageList.Err.UnknownVar("a", Some("[e, a] -> [f, g, h]"))
         )
 
 end BindingTest

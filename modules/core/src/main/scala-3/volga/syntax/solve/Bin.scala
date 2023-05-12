@@ -99,7 +99,7 @@ object Bin:
 
     def fromElements[A](xs: Iterable[A]): Bin[A] =
         if xs.isEmpty then Bud
-        else xs.view.map(Leaf(_)).reduceRight(Branch(_, _))
+        else xs.view.map(Leaf(_)).reduce(Branch(_, _))
 
 end Bin
 

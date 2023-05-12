@@ -9,6 +9,9 @@ trait Labeled[V]:
     def toMap(vs: Vector[V]): Map[Label, V] =
         vs.map(v => label(v) -> v).toMap
 
+    def replenish(src: V, tgt: V): V = src
+
+
 trait Variable[V, Description](using val describeMagma: PMagma[Description]) extends Labeled[V]:
     def describe(v: V): Description
 
@@ -21,4 +24,5 @@ object Variable:
         type Label = String
         def label(v: String): String    = v
         def describe(v: String): String = v
+
 end Variable

@@ -6,26 +6,32 @@ import scala.quoted.{Quotes, Expr}
 trait VError:
     def report(): Unit
 
+    def reportAndAbort(): Nothing
+
     def ++(err: VError): VError = VError.Concat(Vector(this, err))
 
 object VError:
-    private def report(using q: Quotes) = q.reflect.report
+    private def rep(using q: Quotes) = q.reflect.report
 
-    def of(using Quotes)(message: String): VError = () => report.error(message)
+    def of(using Quotes)(message: String): VError = new:
+        def report()         = rep.error(message)
+        def reportAndAbort() = rep.errorAndAbort(message)
 
-    def atExpr(using Quotes)(expr: Expr[Any])(s: String): VError = () => report.error(s, expr)
-
-    def atPos(using q: Quotes)(pos: q.reflect.Position)(s: String): VError = () => report.error(s, pos)
-
-    def atTree(using q: Quotes)(tree: q.reflect.Tree)(s: String): VError = atPos(tree.pos)(s)
+    def atTree(using q: Quotes)(s: String)(tree: q.reflect.Tree): VError = new:
+        def report()         = rep.error(s"$s\n $tree", tree.pos)
+        def reportAndAbort() = rep.errorAndAbort(s"$s\n $tree", tree.pos)
 
     class Concat(val errs: Vector[VError]) extends VError:
-        def report(): Unit = errs.foreach(_.report())
+        def report(): Unit            = errs.foreach(_.report())
+        def reportAndAbort(): Nothing =
+            errs.init.foreach(_.report())
+            errs.last.reportAndAbort()
 
         override def ++(err: VError): VError =
             err match
                 case c: Concat => Concat(errs ++ c.errs)
                 case _         => Concat(errs :+ err)
+    end Concat
 
     def applyOr[A <: Matchable, B](x: A)(f: PartialFunction[A, B])(err: => VError): Either[VError, B] =
         x match
@@ -39,7 +45,7 @@ object VError:
         val elems              = Vector.newBuilder[B]
         xs.foreach {
             case f(elem) => if err == null then elems += elem
-            case x       => 
+            case x       =>
                 val e = err
                 err = if e != null then e ++ mkErr(x) else mkErr(x)
         }
