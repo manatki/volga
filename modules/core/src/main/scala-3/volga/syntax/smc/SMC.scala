@@ -46,7 +46,14 @@ final abstract class SyApp[H[_, _], U[_]] extends Aliases[H, U]:
     extension [A, B](f: H[A, B]) def apply(v: V[A]): Results[U, B]
     extension [B](f: H[I, B]) def apply(): V[B]
 
-final class Syntax[H[_, _], U[_]] extends Aliases[H, U]:
+trait TEq[A1 <: AnyKind, A2 <: AnyKind]
+
+object TEq:
+    private val reflAny: TEq[Any, Any]     = new:
+        def leibniz[F[_]](fa: F[Any]): F[Any] = fa
+    given refl[A1 <: AnyKind]: TEq[A1, A1] = reflAny.asInstanceOf[TEq[A1, A1]]
+
+final class Syntax[H[_, _], U[_], Plus[_, _]](using TEq[Plus, [a, b] =>> U[tags.Tensor[a, b]]]) extends Aliases[H, U]:
 
     def dummy[A, B]: H[A, B] = null.asInstanceOf[H[A, B]]
 
@@ -73,7 +80,7 @@ final class Syntax[H[_, _], U[_]] extends Aliases[H, U]:
 
     inline def of5[A, B, C, D, E, R](
         inline f: SyApp[H, U] ?=> (V[A], V[B], V[C], V[D], V[E]) => R
-    )(using SymmetricCat[H, U]): H[A x B x C x D x E, Reconstruct[U, R]] =
+    )(using smc: SymmetricCat[H, U]): H[A x B x C x D x E, Reconstruct[U, R]] =
         syntax(f)
 
     inline def of6[A, B, C, D, E, F, R](
@@ -87,67 +94,22 @@ final class Syntax[H[_, _], U[_]] extends Aliases[H, U]:
         syntax(f)
 
     private inline def syntax[I, R](inline block: SyApp[H, U] ?=> Any)(using smc: SymmetricCat[H, U]): H[I, R] =
-        ${ Syntax.smcMacro[H, U, I, R]('this, 'smc)('block) }
+        ${ Syntax.smcMacro[H, U, Plus, I, R]('this, 'smc)('block) }
 
 end Syntax
 object Syntax:
-    def smcMacro[H[_, _]: Type, U[_]: Type, A: Type, R: Type](
-        syntax: Expr[Syntax[H, U]],
+    def smcMacro[H[_, _]: Type, U[_]: Type, Plus[_, _]: Type, A: Type, R: Type](
+        syntax: Expr[Syntax[H, U, Plus]],
         smc: Expr[SymmetricCat[H, U]]
     )(
         body: Expr[SyApp[H, U] ?=> Any]
-    )(using Quotes): Expr[H[A, R]] = SMCMacro[H, U](syntax, smc).smcSyntax(body)
+    )(using Quotes): Expr[H[A, R]] = SMCMacro[H, U, Plus](syntax, smc).smcSyntax(body)
 
-class SMCMacro[H[_, _], U[_]](
-    sym: Expr[Syntax[H, U]],
-    smc: Expr[SymmetricCat[H, U]]
-)(using Type[H], Type[U])(using val q: Quotes)
-    extends Aliases[H, U]:
-    import q.reflect.*
 
-    given MonadicTyping[q.type] with
-        def one  = TypeRepr.of[U[tags.One]]
-        def tensor = TypeRepr.of[[a, b] =>> U[tags.Tensor[a, b]]]
 
-    val parse = MParsing()
-    val gen   = MGeneration(smc)
 
-    def smcSyntax[I: Type, R: Type](expr: Expr[Any]): Expr[H[I, R]] =
-        val t = expr.asTerm
 
-        val (vars, mterms, fterm) = parse.parseBlock(t) match
-            case Left(verror)  => verror.reportAndAbort()
-            case Right(values) => values
-
-        val stageList = StageList.fromTerms(vars, mterms, fterm)
-
-        val adapted = StageList.withAdaptation(stageList) match
-            case Left(e)     => e.reportAndAbort
-            case Right(vals) => vals
-
-        val termsRepr = (mterms :+ fterm).view.mkString("\n")
-
-        val stageRepr = stageList.mkString("\n")
-
-        val adaptedRepr = adapted.mkString("\n")
-
-        val generated = gen.generate(adapted).asExprOf[H[I, R]]
-
-        val s =
-            s"""|success 
-                |${t.show(using Printer.TreeStructure)}
-                |------
-                |$termsRepr
-                |------
-                |$stageRepr
-                |------
-                |$adaptedRepr""".stripMargin
-
-        report.info(s, expr)
-
-        generated
-    end smcSyntax
-
-end SMCMacro
-
-def syntax[H[_, _], U[_]](using SymmetricCat[H, U]): Syntax[H, U] = Syntax()
+def syntax[H[_, _], U[_], Plus[_, _]](using
+    SymmetricCat[H, U],
+    TEq[Plus, [a, b] =>> U[tags.Tensor[a, b]]]
+): Syntax[H, U, Plus] = Syntax()

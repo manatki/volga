@@ -36,7 +36,6 @@ final class MGeneration[H[_, _]: Type, U[_]: Type, q <: Quotes & Singleton](sym:
 
     def generate(terms: StageList.Adapted[Var[q.type], Tree, MndType[q, TypeRepr]]): Expr[Any] =
         val exp = terms.view.map(generateAdaptTerm).reduce(andThen).hom
-        report.info(s"generated: ${exp.show} of type ${exp.asTerm.tpe.dealias.widen.show}")
 
         exp
 
@@ -47,7 +46,11 @@ final class MGeneration[H[_, _]: Type, U[_]: Type, q <: Quotes & Singleton](sym:
     private def joinType(v: Vector[Var[q.type]]): TypeRepr =
         v.view.map(_.requireTyp).reduceOption(tensorType).getOrElse(typing.one)
 
-    private def tensorType(x: TypeRepr, y: TypeRepr): TypeRepr = typing.tensor.appliedTo(List(x, y))
+    private def tensorType(a: TypeRepr, b: TypeRepr): TypeRepr =
+        a.asType match
+            case '[a] =>
+                b.asType match
+                    case '[b] => typing.tensorT[a, b]
 
     private def generateAdaptTerm(
         adapt: StageList.Adapt[Var[q.type], Tree, TypeRepr]
@@ -189,13 +192,13 @@ final class MGeneration[H[_, _]: Type, U[_]: Type, q <: Quotes & Singleton](sym:
                                 val obB = summonOb[b]
                                 val obC = summonOb[c]
                                 side match
-                                    case L =>
+                                    case R =>
                                         TypedHomC(
                                           hom = '{ $sym.assocLeft[a, b, c](using $obA, $obB, $obC) },
                                           obI = '{ $sym.tensorOb($obA, $sym.tensorOb($obB, $obC)) },
                                           obO = '{ $sym.tensorOb($sym.tensorOb($obA, $obB), $obC) }
                                         )
-                                    case R =>
+                                    case L =>
                                         TypedHomC(
                                           hom = '{ $sym.assocRight[a, b, c](using $obA, $obB, $obC) },
                                           obI = '{ $sym.tensorOb($sym.tensorOb($obA, $obB), $obC) },

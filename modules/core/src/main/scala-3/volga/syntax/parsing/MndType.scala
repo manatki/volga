@@ -3,11 +3,13 @@ package volga.syntax.parsing
 import scala.quoted.Quotes
 import scala.collection.View.Single
 import volga.syntax.solve.PMagma
+import scala.quoted.Type
 
 trait MonadicTyping[q <: Quotes](using val q: q):
     import q.reflect.*
     def one: TypeRepr
     def tensor: TypeRepr
+    def tensorT[a: Type, b: Type]: TypeRepr
 
 object MndType:
     opaque type MndType[+q, TR] <: TR = TR
