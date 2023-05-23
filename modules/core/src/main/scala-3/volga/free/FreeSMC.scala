@@ -1,13 +1,7 @@
-package volga.free
+package volga
+package free
 
-import volga.tags.Tensor
-
-import volga.tags.One
-
-import volga.tags.Hom
-
-import volga.{ObAliases, Aliases, Iso, SymmetricCat}
-import volga.tags.{Hom, One, Tensor}
+import volga.tags.*
 abstract class FreeSMC[Q[_, _], U[_]] extends ObAliases[U]:
     def unitObj: Ob[I]
     def tensorObj[A, B](using Ob[A], Ob[B]): Ob[A x B]
@@ -27,7 +21,7 @@ abstract class FreeSMC[Q[_, _], U[_]] extends ObAliases[U]:
 
     def embed[A, B](h: Q[A, B]): Free[A, B] = Free.Embed(h)
 
-    object Free extends Aliases[Free, U]:
+    object Free extends HomAliases[Free]:
         import FreeHom.*
         given freeSmc: SymmetricCat[Free, U] with
 
