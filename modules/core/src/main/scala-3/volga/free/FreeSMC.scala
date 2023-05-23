@@ -13,6 +13,7 @@ abstract class FreeSMC[Q[_, _], U[_]] extends ObAliases[U]:
     def tensorObj[A, B](using Ob[A], Ob[B]): Ob[A x B]
 
     enum Free[X, Y]:
+        case Ident[A]()                                   extends (A --> A)
         case Embed[A, B](f: Q[A, B])                      extends (A --> B)
         case SpawnLeft[A]()                               extends (A --> (I x A))
         case DropLeft[A]()                                extends ((I x A) --> A)
@@ -20,7 +21,6 @@ abstract class FreeSMC[Q[_, _], U[_]] extends ObAliases[U]:
         case Parallel[A, B, C, D](f: A --> B, g: C --> D) extends ((A x C) --> (B x D))
         case Sequential[A, B, C](f: A --> B, g: B --> C)  extends (A --> C)
         case Braiding[A, B]()                             extends ((A x B) --> (B x A))
-        case Ident[A]()                                   extends (A --> A)
     end Free
 
     object FreeHom extends Aliases[Free, U]
