@@ -30,8 +30,9 @@ object FreeCat:
     case class Embed[U[_], +Q[_, _], A, B](f: Q[A, B]) extends FreeCat[U, Q, A, B]
 
     sealed trait Monoidal[U[_], Dom, Codom]
-    sealed trait Symmetric[U[_], Dom, Codom] extends Monoidal[U, Dom, Codom]
-    sealed trait Cartesian[U[_], Dom, Codom] extends Symmetric[U, Dom, Codom]
+    sealed trait Symmetric[U[_], Dom, Codom]   extends Monoidal[U, Dom, Codom]
+    sealed trait Cartesian[U[_], Dom, Codom]   extends Symmetric[U, Dom, Codom]
+    sealed trait Cocartesian[U[_], Dom, Codom] extends Symmetric[U, Dom, Codom]
 
     case class SpawnLeft[U[_], A]()        extends Monoidal[U, A, U[T[U[One], A]]]
     case class DropLeft[U[_], A]()         extends Monoidal[U, U[T[U[One], A]], A]
@@ -41,4 +42,6 @@ object FreeCat:
     case class Braiding[U[_], A, B]()      extends Symmetric[U, U[T[A, B]], U[T[B, A]]]
     case class Copy[U[_], A]()             extends Cartesian[U, A, U[T[A, A]]]
     case class Delete[U[_], A]()           extends Cartesian[U, A, U[One]]
+    case class Merge[U[_], A]()            extends Cocartesian[U, U[T[A, A]], A]
+    case class Generate[U[_], A]()         extends Cocartesian[U, U[One], A]
 end FreeCat
