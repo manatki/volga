@@ -11,7 +11,7 @@ import volga.util.collections.*
 import volga.functors.Traverse
 import volga.functors.Functor
 
-enum Bin[+A] derives Traverse:
+enum Bin[+A]:
     case Branch(l: Bin[A], r: Bin[A])
     case Leaf(a: A)
     case Bud
@@ -100,6 +100,8 @@ object Bin:
     def fromElements[A](xs: Iterable[A]): Bin[A] =
         if xs.isEmpty then Bud
         else xs.view.map(Leaf(_)).reduce(Branch(_, _))
+
+    given Traverse[Bin] = Traverse.derived[Bin]
 
 end Bin
 

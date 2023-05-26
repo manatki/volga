@@ -111,20 +111,24 @@ object Cat:
         def compose[A: Ob, B: Ob, C: Ob](f: B --> C, g: A --> B): A --> C =
             Iso(to = f.to <<< g.to, from = f.from >>> g.from)
 
-trait MonoidalCat[H[_, _], U[_]] extends Cat[H, U]:
+trait MonoidalObjects[U[_]] extends ObAliases[U]:
     given unitOb: Ob[I]
     given tensorOb[A: Ob, B: Ob]: Ob[A x B]
 
+trait MonoidalCat[H[_, _], U[_]](using objects: MonoidalObjects[U]) extends Cat[H, U]:
+    export objects.given
     def tensor[A: Ob, B: Ob, C: Ob, D: Ob](f: A --> B, g: C --> D): (A x C) --> (B x D)
-
     def associate[A: Ob, B: Ob, C: Ob]: (A x (B x C)) <--> ((A x B) x C)
     def rightUnit[A: Ob]: (A x I) <--> A
     def leftUnit[A: Ob]: (I x A) <--> A
 
-    extension [A: Ob, B: Ob](f: A --> B) infix def ><[C: Ob, D: Ob](g: C --> D): (A x C) --> (B x D) = tensor(f, g)
+    extension [A: Ob, B: Ob](f: A --> B)
+        infix def ><[C: Ob, D: Ob](g: C --> D): (A x C) --> (B x D)  = tensor(f, g)
+        infix def *#*[C: Ob, D: Ob](g: C --> D): (A x C) --> (B x D) = tensor(f, g)
 end MonoidalCat
 
 trait SymmetricCat[H[_, _], U[_]] extends MonoidalCat[H, U]:
+
     def braiding[A: Ob, B: Ob]: (A x B) --> (B x A)
 
     def symmetry[A: Ob, B: Ob]: (A x B) <--> (B x A) = Iso(braiding, braiding)
@@ -229,7 +233,7 @@ trait CompactCat[H[_, _], U[_]] extends ClosedCat[H, U]:
     def substClosureBack[F[_], A: Ob, B: Ob](fd: F[A ==> B]): F[^[A] x B] =
         dualClosureEquality.substituteCo(fd)
 
-    override given closureOb[A: Ob, B: Ob]: Ob[A ==> B] = substClosure(tensorOb)
+    override given closureOb[A: Ob, B: Ob]: Ob[A ==> B] = substClosure(tensorOb[^[A], B])
 
     override def curry[A: Ob, B: Ob, C: Ob](f: (A x B) --> C): B --> (A ==> C) =
         substClosure[[x] =>> B --> x, A, C](
@@ -247,5 +251,25 @@ trait CompactCat[H[_, _], U[_]] extends ClosedCat[H, U]:
             leftUnit.to
 end CompactCat
 
-trait HasScalaFunctor[H[_, _], U[_]] extends Aliases[H, U]:
+trait ScalaObjects[U[_]] extends ObAliases[U]:
+    given scalaOb[A]: Ob[$[A]]
+
+trait ScalaFunctor[H[_, _], U[_]](using scalaObs: ScalaObjects[U]) extends Cat[H, U]:
+    export scalaObs.scalaOb
     def lift[A, B](f: A => B): $[A] --> $[B]
+
+trait ApplyCat[H[_, _], U[_]] extends SymmetricCat[H, U] with ScalaFunctor[H, U]:
+    def scalaUnit: I --> $[Unit]
+    def zip[A, B]: ($[A] x $[B]) --> $[(A, B)]
+
+    def pure[A](a: A): I --> $[A]                                              = scalaUnit >>> lift[Unit, A](_ => a)
+    def zipWith[A, B, C](f: (A, B) => C): ($[A] x $[B]) --> $[C]               = zip[A, B] >>> lift(f.tupled)
+    def zipWith3[A, B, C, D](f: (A, B, C) => D): ($[A] x $[B] x $[C]) --> $[D] =
+        zip *#* ident[$[C]] >>> zip >>> lift { case ((a, b), c) => f(a, b, c) }
+
+    def zipWith4[A, B, C, D, E](f: (A, B, C, D) => E): ($[A] x $[B] x $[C] x $[D]) --> $[E] =
+        zip *#* ident[$[C]] *#* ident[$[D]] >>>
+            zip *#* ident >>>
+            zip >>>
+            lift { case (((a, b), c), d) => f(a, b, c, d) }
+end ApplyCat

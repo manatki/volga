@@ -2,9 +2,7 @@ package volga
 package free
 
 import volga.tags.*
-abstract class FreeSMC[Q[_, _], U[_]] extends ObAliases[U]:
-    def unitObj: Ob[I]
-    def tensorObj[A, B](using Ob[A], Ob[B]): Ob[A x B]
+abstract class FreeSMC[Q[_, _], U[_]](using MonoidalObjects[U]) extends ObAliases[U]:
 
     enum Free[X, Y]:
         case Ident[A]()                                   extends (A --> A)
@@ -27,8 +25,6 @@ abstract class FreeSMC[Q[_, _], U[_]] extends ObAliases[U]:
 
             override def assocLeft[A: Ob, B: Ob, C: Ob]: (A x (B x C)) --> ((A x B) x C) = Assoc()
 
-            override def unitOb: Ob[I]                                                       = unitObj
-            override def tensorOb[A: Ob, B: Ob]: Ob[A x B]                                   = tensorObj
             override def compose[A: Ob, B: Ob, C: Ob](f: Free[B, C], g: Free[A, B]): A --> C = Sequential(g, f)
 
             override def identity[A: Ob]: A --> A = Ident()

@@ -47,15 +47,16 @@ object FreeProp:
         val one = Nat.Succ(Nat.Zero())
         Swap(one, one)
 
+    given MonoidalObjects[PropOb] with
+        override given unitOb: Ob[PropOb[One]] = Nat.Zero()
+
+        override given tensorOb[A: Nat, B: Nat]: Nat[Nat.Plus[A, B]] = Nat.plus[A, B]
+
     given propCat[H[_, _]]: SymmetricCat[FreeProp[H, _, _], PropOb] with
         import Nat.{Plus, +}
 
         inline def idIso[A, B](using inline proof: => A =:= B): A <--> B =
             Iso(FreeProp.id[A, B], FreeProp.id(using proof.flip))
-
-        override given unitOb: Ob[PropOb[One]] = Nat.Zero()
-
-        override given tensorOb[A: Nat, B: Nat]: Nat[Plus[A, B]] = Nat.plus[A, B]
 
         override def leftUnit[A](using PropOb[Obj[A]]): Plus[Nat.Zero, A] <--> A = idIso(using Nat.lzero)
 

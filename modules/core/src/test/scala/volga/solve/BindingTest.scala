@@ -51,7 +51,7 @@ class BindingTest extends munit.FunSuite:
                     case _ if elem.next.goThrough.isEmpty => (outBin, Vector())
                     case Bin.Branch(eff, keep)            => (eff, keep.elems)
                     case _                                => throw RuntimeException(s"expecting branch but out is $outBin")
-                assertEquals(outBinEff.elems, out)
+                assertEquals(outBinEff.elems, out.toVector)
                 go(keep)
             else if remains.nonEmpty then throw RuntimeException(s"something remains $remains")
             go(Vector())
@@ -62,7 +62,7 @@ class BindingTest extends munit.FunSuite:
 
         def listNoHistory = result.right.get.toVector.map(_.copy(adaptation = Vector()))
 
-        def checkList(noHistory: Boolean)(adapts: Adapt[String, String, Any]*): this.type =
+        def checkList(noHistory: Boolean)(adapts: Adapt[String, String, String]*): this.type =
             assertEquals(if noHistory then listNoHistory else list, adapts.toVector)
             this
 
