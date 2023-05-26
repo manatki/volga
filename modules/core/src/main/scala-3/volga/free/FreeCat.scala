@@ -60,11 +60,12 @@ object FreeCat:
     case class ScalaUnit[U[_]]()                            extends Application[U, U[One], U ss Unit]
     case class Zip[U[_], A, B]()                            extends Application[U, U[T[U ss A, U ss B]], U ss (A, B)]
 
-    private trait CatInstance[U[_], Q[x, y]] extends Cat[FreeCat[U, Q, _, _], U]:
+    private class CatInstance[U[_], Q[x, y]] extends Cat[FreeCat[U, Q, _, _], U]:
         def identity[A: Ob]: A --> A                                      = Ident()
         def compose[A: Ob, B: Ob, C: Ob](f: B --> C, g: A --> B): A --> C = Sequential(g, f)
     end CatInstance
 
+    given catInstance[Q[x, y], U[_]]: Cat[FreeCat[U, Q, _, _], U] = new CatInstance
     private class MonoidalCatInstance[U[_], Q[x, y] >: Monoidal[U, x, y]](using MonoidalObjects[U])
         extends CatInstance[U, Q]
         with MonoidalCat[FreeCat[U, Q, _, _], U]:
@@ -79,6 +80,11 @@ object FreeCat:
         override def tensor[A: Ob, B: Ob, C: Ob, D: Ob](f: A --> B, g: C --> D): (A x C) --> (B x D) = Parallel(f, g)
     end MonoidalCatInstance
 
+    given monoidalCatInstance[Q[x, y] >: Monoidal[U, x, y], U[_]](using
+        MonoidalObjects[U]
+    ): MonoidalCat[FreeCat[U, Q, _, _], U] =
+        new MonoidalCatInstance
+
     private class SymmetricCatInstance[U[_], Q[x, y] >: Symmetric[U, x, y]](using MonoidalObjects[U])
         extends MonoidalCatInstance[U, Q]
         with SymmetricCat[FreeCat[U, Q, _, _], U]:
@@ -87,12 +93,21 @@ object FreeCat:
         def assocLeft[A: Ob, B: Ob, C: Ob]: FreeCat[U, Q, U[T[A, U[T[B, C]]]], U[T[U[T[A, B]], C]]] = Embed(AssocLeft())
     end SymmetricCatInstance
 
+    given symmetricCatInstance[Q[x, y] >: Symmetric[U, x, y], U[_]](using
+        MonoidalObjects[U]
+    ): SymmetricCat[FreeCat[U, Q, _, _], U] =
+        new SymmetricCatInstance
+
     private trait LiftingCatInsstance[U[_], Q[x, y] >: Lifting[U, x, y]]
         extends CatInstance[U, Q]
         with ScalaFunctor[FreeCat[U, Q, _, _], U]:
         def lift[A, B](f: A => B): $[A] --> $[B] = Embed(Lift(f))
 
-    private class ApplyCatInstsance[U[_], Q[x, y] >: Scalian[U, x, y]](using MonoidalObjects[U], ScalaObjects[U])
+    given liftingCatInstance[Q[x, y] >: Lifting[U, x, y], U[_]](using
+        ScalaObjects[U]
+    ): ScalaFunctor[FreeCat[U, Q, _, _], U] = new LiftingCatInsstance {}
+
+    private class ApplyCatInstance[U[_], Q[x, y] >: Scalian[U, x, y]](using MonoidalObjects[U], ScalaObjects[U])
         extends SymmetricCatInstance[U, Q]
         with LiftingCatInsstance[U, Q]
         with ApplyCat[FreeCat[U, Q, _, _], U]:
@@ -100,6 +115,11 @@ object FreeCat:
         def scalaUnit: I --> $[Unit] = Embed(ScalaUnit())
 
         def zip[A, B]: ($[A] x $[B]) --> $[(A, B)] = Embed(Zip())
-    end ApplyCatInstsance
+    end ApplyCatInstance
+
+    given applyCatInstance[Q[x, y] >: Scalian[U, x, y], U[_]](using
+        MonoidalObjects[U],
+        ScalaObjects[U]
+    ): ApplyCat[FreeCat[U, Q, _, _], U] = new ApplyCatInstance
 
 end FreeCat
