@@ -11,7 +11,8 @@ enum FreeObj[X] extends FreeU[tags.Obj[X]]:
     case Prod[A, B](l: FreeObj[A], r: FreeObj[B]) extends FreeObj[FreeU[tags.Tensor[A, B]]]
 
 object FreeU extends ObAliases[FreeU]:
-    given forScala[A]: Ob[$[A]] = FreeObj.Scala()
+    given scalaObjects: ScalaObjects[FreeU] with
+        given scalaOb[A]: Ob[FreeU[Scala[A]]] = FreeObj.Scala()
     given monoidalObjects: MonoidalObjects[FreeU] with
         given unitOb: Ob[FreeU[One]]                              = FreeObj.One
         given tensorOb[A, B](using a: Ob[A], b: Ob[B]): Ob[A x B] =
