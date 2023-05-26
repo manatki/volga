@@ -53,7 +53,7 @@ object Nat:
                 teq[c, Succ[c1]].liftCo[Plus[Plus[a, b], _]] andThen
                     assoc[a, b, c1].liftCo[Succ] andThen
                     teq[Succ[c1], c].liftCo[[x] =>> Plus[a, Plus[b, x]]]
-
+             
     def succPlus[a, b: Nat]: Succ[Plus[a, b]] =:= Plus[Succ[a], b] =
         Nat[b] match
             case Zero()              => <:<.refl
@@ -129,3 +129,20 @@ object Nat:
     end Vec
 
 end Nat
+
+
+trait Foo[X, Y]:
+    type T >: X <: Y
+
+import scala.compiletime.ops.int.*
+
+abstract class NatLTE[A <: Int, B <: Int]:
+    type C <: Int
+    def ev: (A + C) =:= B
+
+def ltAsGt[A <: Int, B <: Int](using ev: (A < B) =:= true): (B > A) =:= true = 
+    ev.asInstanceOf[(B > A) =:= true]
+
+def bar(foo: Foo[Int, String]): (Int <:< String) = 
+    val ev: foo.T <:< String = <:<.refl
+    ev

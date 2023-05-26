@@ -16,7 +16,7 @@ import tags.{One, Obj, Tensor as T, Scala}
 sealed trait FreeCat[+U[_], +Q[_, _], Dom, Codom]
 
 object FreeCat:
-    case class Parallel[U[_], +Q[_, _], A, B, C, D](
+    case class Parallel[U[_], +Q[x, y] >: Monoidal[U, x, y], A, B, C, D](
         f: FreeCat[U, Q, A, B],
         g: FreeCat[U, Q, C, D]
     ) extends FreeCat[U, Q, U[T[A, C]], U[T[B, D]]]
