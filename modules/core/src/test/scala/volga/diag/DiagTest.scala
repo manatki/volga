@@ -105,10 +105,12 @@ end DiagTest
     val expIdent: DAG[1, 1] = prop.of1((x: V1) => x)
     val expApply: DAG[1, 0] = prop.of1((v: V1) => bNode(v))
     val expSwap: DAG[2, 2]  = prop.of2((a: V1, b: V1) => (b, a))
-    val expSwap2: DAG[3, 3] = prop.of3((a: V1, b: V1, c: V1) => (b, a, c))
+    val expSwap2: DAG[3, 3] = prop.of3((a: V1, b: V1, c: V1) => (c, b, a))
     val expSwap3: DAG[3, 3] = prop.of3((a: V1, b: V1, c: V1) => (c, a, b))
     val expSwap4: DAG[5, 5] =
         prop.of5((a: V1, b: V1, c: V1, d: V1, e: V1) => (c, a, e, d, b))
 
-    showGraph(expSwap4)
+    showGraph(expSwap3)
 end DiagTest1
+
+

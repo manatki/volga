@@ -13,21 +13,33 @@ package features:
 import features.*
 import tags.{One, Obj, Tensor as T, Scala}
 
-sealed trait FreeCat[+U[_], +Q[_, _], Dom, Codom]
+sealed trait FreeCat[U[_], +Q[_, _], Dom, Codom]
 
 object FreeCat:
-    case class Parallel[U[_], +Q[x, y] >: Monoidal[U, x, y], A, B, C, D](
+    final case class Parallel[U[_], +Q[x, y], A, B, C, D](
         f: FreeCat[U, Q, A, B],
         g: FreeCat[U, Q, C, D]
+    )(using
+        val a: U oo A,
+        val b: U oo B,
+        val c: U oo C,
+        val d: U oo D
     ) extends FreeCat[U, Q, U[T[A, C]], U[T[B, D]]]
 
-    case class Sequential[+U[_], +Q[_, _], A, B, C](
+    case class Sequential[U[_], +Q[_, _], A, B, C](
         f: FreeCat[U, Q, A, B],
         g: FreeCat[U, Q, B, C]
+    )(using
+        val a: U oo A,
+        val b: U oo B,
+        val c: U oo C
     ) extends FreeCat[U, Q, A, C]
 
-    case class Ident[U[_], A]()                        extends FreeCat[U, Nothing, A, A]
-    case class Embed[U[_], +Q[_, _], A, B](f: Q[A, B]) extends FreeCat[U, Q, A, B]
+    case class Ident[U[_], A]()(using val a: U oo A) extends FreeCat[U, Nothing, A, A]
+    case class Embed[U[_], +Q[_, _], A, B](f: Q[A, B])(using
+        val a: U oo A,
+        val b: U oo B
+    ) extends FreeCat[U, Q, A, B]
 
     sealed trait Monoidal[U[_], X, Y]
     sealed trait Symmetry[U[_], Dom, Codom]
@@ -43,12 +55,15 @@ object FreeCat:
 
     type oo[U[_], A] = U[Obj[A]]
     type ss[U[_], A] = U[Scala[A]]
-    case class SpawnLeft[U[_], A]()(using U oo A)           extends Monoidal[U, A, U[T[U[One], A]]]
-    case class SpawnRight[U[_], A]()(using U oo A)          extends Monoidal[U, A, U[T[A, U[One]]]]
-    case class DropLeft[U[_], A]()(using U oo A)            extends Monoidal[U, U[T[U[One], A]], A]
-    case class DropRight[U[_], A]()(using U oo A)           extends Monoidal[U, U[T[A, U[One]]], A]
-    case class AssocLeft[U[_], A, B, C]()(using U oo A, U oo B, U oo C)
-        extends Monoidal[U, U[T[A, U[T[B, C]]]], U[T[U[T[A, B]], C]]]
+    case class SpawnLeft[U[_], A]()(using val a: U oo A)    extends Monoidal[U, A, U[T[U[One], A]]]
+    case class SpawnRight[U[_], A]()(using val a: U oo A)   extends Monoidal[U, A, U[T[A, U[One]]]]
+    case class DropLeft[U[_], A]()(using val a: U oo A)     extends Monoidal[U, U[T[U[One], A]], A]
+    case class DropRight[U[_], A]()(using val a: U oo A)    extends Monoidal[U, U[T[A, U[One]]], A]
+    case class AssocLeft[U[_], A, B, C]()(using
+        val a: U oo A,
+        val b: U oo B,
+        val c: U oo C
+    ) extends Monoidal[U, U[T[A, U[T[B, C]]]], U[T[U[T[A, B]], C]]]
     case class AssocRight[U[_], A, B, C]()(using U oo A, U oo B, U oo C)
         extends Monoidal[U, U[T[U[T[A, B]], C]], U[T[A, U[T[B, C]]]]]
     case class Braiding[U[_], A, B]()(using U oo A, U oo B) extends Symmetry[U, U[T[A, B]], U[T[B, A]]]

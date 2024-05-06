@@ -52,6 +52,8 @@ class SMCMacro[H[_, _], U[_], Plus[_, _]](
         val adaptedRepr = adapted.mkString("\n")
 
         val generated = gen.generate(adapted).asExprOf[H[I, R]]
+        val s = generated.show
+        report.info(s)
 
         // val s =
         //     s"""|success 
