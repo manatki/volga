@@ -2,8 +2,8 @@ name := "volga"
 
 val publishVersion = "0.2"
 
-val scala3version = "3.3.0"
-val scala2version = "2.13.10"
+val scala3version = "3.3.3"
+val scala2version = "2.13.14"
 
 crossScalaVersions := List(scala3version, scala2version)
 
@@ -84,7 +84,7 @@ val oldSettings = Vector(
   ) map (_               % Test),
   libraryDependencies ++=
       List(
-        compilerPlugin("org.typelevel" % "kind-projector"     % "0.13.2" cross CrossVersion.patch),
+        compilerPlugin("org.typelevel" % "kind-projector"     % "0.13.3" cross CrossVersion.patch),
         compilerPlugin("com.olegpy"   %% "better-monadic-for" % "0.3.1")
       ),
   scalaVersion       := scala2version,
