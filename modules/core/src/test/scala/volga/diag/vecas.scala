@@ -13,8 +13,8 @@ object Instances:
 
     private inline def find[T <: Tuple, X](inline t: T): X =
         inline t match
-            case t1: (X *: t)  => t1.head
-            case t1: (h *: t)  => find[t, X](t1.tail)
+            case t1: (X *: t)  => (t1: (X *: t)).head
+            case t1: (h *: t)  => find[t, X]((t1: h *: t).tail)
             case _: EmptyTuple => error("not found")
 
 end Instances
