@@ -53,7 +53,7 @@ object Nat:
                 teq[c, Succ[c1]].liftCo[Plus[Plus[a, b], _]] andThen
                     assoc[a, b, c1].liftCo[Succ] andThen
                     teq[Succ[c1], c].liftCo[[x] =>> Plus[a, Plus[b, x]]]
-             
+
     def succPlus[a, b: Nat]: Succ[Plus[a, b]] =:= Plus[Succ[a], b] =
         Nat[b] match
             case Zero()              => <:<.refl
@@ -76,7 +76,7 @@ object Nat:
         case Nat.Succ[n] => A *: Vec[n, A]
 
     extension [N: Nat, A](v: Vec[N, A])
-        def toVector: Vector[A]                                                 = Nat[N] match
+        def toVector: Vector[A] = Nat[N] match
             case Zero()             => Vector.empty
             case Succ(given Nat[n]) =>
                 teq[N, Succ[n]].liftCo[Vec[_, A]](v) match
@@ -93,10 +93,10 @@ object Nat:
                               succPlus[M, n].flip andThen teq[Succ[n], N].liftCo[Plus[M, _]] andThen eq
                             )
 
-        def reverse: Vec[N, A] = reverseConcat[Zero, N, A](EmptyTuple, lzero)
+        def reverseVec: Vec[N, A] = reverseConcat[Zero, N, A](EmptyTuple, lzero)
 
-        def concat[M: Nat, B](v1: Vec[M, B]): Vec[Plus[N, M], A | B] =
-            v.reverse.reverseConcat(v1, comm[M, N])
+        def concatVec[M: Nat, B](v1: Vec[M, B]): Vec[Plus[N, M], A | B] =
+            v.reverseVec.reverseConcat(v1, comm[M, N])
 
     end extension
 
@@ -115,7 +115,7 @@ object Nat:
             eq: Plus[K, N] =:= R
         ): (Vec[M, A], Vec[R, A]) =
             Nat[N] match
-                case Zero()             => (v, eq.liftCo[Vec[_, A]](acc).reverse)
+                case Zero()             => (v, eq.liftCo[Vec[_, A]](acc).reverseVec)
                 case Succ(given Nat[n]) =>
                     teq[N, Succ[n]].liftCo[[x] =>> Vec[Plus[M, x], A]](v) match
                         case h *: t =>
@@ -130,7 +130,6 @@ object Nat:
 
 end Nat
 
-
 trait Foo[X, Y]:
     type T >: X <: Y
 
@@ -140,9 +139,9 @@ abstract class NatLTE[A <: Int, B <: Int]:
     type C <: Int
     def ev: (A + C) =:= B
 
-def ltAsGt[A <: Int, B <: Int](using ev: (A < B) =:= true): (B > A) =:= true = 
+def ltAsGt[A <: Int, B <: Int](using ev: (A < B) =:= true): (B > A) =:= true =
     ev.asInstanceOf[(B > A) =:= true]
 
-def bar(foo: Foo[Int, String]): (Int <:< String) = 
+def bar(foo: Foo[Int, String]): (Int <:< String) =
     val ev: foo.T <:< String = <:<.refl
     ev

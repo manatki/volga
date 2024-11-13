@@ -82,7 +82,7 @@ object FreeProp:
             case Id()                                                              => (inbound, Vector.empty)
             case Swap(given Nat[a], given Nat[b])                                  =>
                 val (va, vb) = Nat.Vec.split[a, b, H_](inbound)
-                (vb.concat(va), Vector.empty)
+                (vb.concatVec(va), Vector.empty)
             case Embed(h)                                                          =>
                 val links    = inbound.toVector.map((_, h))
                 val outbound = Nat.Vec.replicate[M, H_](h)
@@ -95,6 +95,6 @@ object FreeProp:
                 val (in1, in2)     = Nat.Vec.split[a, c, H_](inbound)
                 val (out1, links1) = link[a, b, H_, H](f, in1)
                 val (out2, links2) = link[c, d, H_, H](g, in2)
-                (out1.concat(out2), links1 ++ links2)
+                (out1.concatVec(out2), links1 ++ links2)
 
 end FreeProp
