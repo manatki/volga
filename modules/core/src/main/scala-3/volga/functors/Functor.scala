@@ -55,10 +55,11 @@ object Functor:
             case _: EmptyTuple =>
                 summonInline[EmptyTuple <:< TB](EmptyTuple)
             case t: (a *: ta)  =>
+                val (th *: tt) = (t: a *: ta)
                 inline erasedValue[TB] match
                     case _: (b *: tb) =>
-                        val tb: tb = functorProduct[A, B, ta, tb](t.tail, f)
-                        val b: b   = summonInline[HeadMatch[a, b, A, B]](t.head)(f)
+                        val tb: tb = functorProduct[A, B, ta, tb](tt, f)
+                        val b: b   = summonInline[HeadMatch[a, b, A, B]](th)(f)
                         summonInline[(b *: tb) =:= TB](b *: tb)
 
     inline def functorSum[A, B, FA, FB, SA, SB](pa: FA, f: A => B): FB =

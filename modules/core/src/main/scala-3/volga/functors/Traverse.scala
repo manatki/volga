@@ -68,11 +68,12 @@ object Traverse:
             case _: EmptyTuple =>
                 M.pure(summonInline[EmptyTuple <:< TB](EmptyTuple))
             case t: (a *: ta)  =>
+                val t1: (a *: ta) = t
                 inline erasedValue[TB] match
                     case _: (b *: tb) =>
-                        val mtb: M[tb] = traverseProduct[A, B, ta, tb, M](t.tail, f)
-                        val mb: M[b]   = summonInline[HeadMatch[a, b, A, B, M]](t.head)(f)
-                        mb.map2(mtb)((b, tb) => summonInline[(b *: tb) =:= TB](b *: tb))
+                        val mtb: M[tb] = traverseProduct[A, B, ta, tb, M](t1.tail, f)
+                        val mb: M[b]   = summonInline[HeadMatch[a, b, A, B, M]](t1.head)(f)
+                        mb.map2(mtb) { (b, tb) => summonInline[(b *: tb) =:= TB](b *: tb) }
 
     inline def traverseSum[A, B, FA, FB, SA, SB, M[+_]: Monoidal](pa: FA, f: A => M[B]): M[FB] =
         inline erasedValue[SA] match

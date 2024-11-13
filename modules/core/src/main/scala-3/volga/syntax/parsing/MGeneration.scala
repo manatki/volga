@@ -101,8 +101,8 @@ final class MGeneration[H[_, _]: Type, U[_]: Type, q <: Quotes & Singleton](sym:
                         val obO = summonOb[y]
                         TypedHomC(
                           hom = '{ $sym.braiding[x, y](using $obI, $obO) },
-                          obI = '{ $sym.tensorOb($obI, $obO) },
-                          obO = '{ $sym.tensorOb($obO, $obI) }
+                          obI = '{ $sym.tensorOb(using $obI, $obO) },
+                          obO = '{ $sym.tensorOb(using $obO, $obI) }
                         )
 
     private def summonOb[X: Type]: Expr[U[tags.Obj[X]]] = '{ summonInline[U[tags.Obj[X]]] }
@@ -125,13 +125,13 @@ final class MGeneration[H[_, _]: Type, U[_]: Type, q <: Quotes & Singleton](sym:
                     case L =>
                         TypedHomC(
                           hom = '{ $sym.leftUnit(using $obX).to },
-                          obI = '{ $sym.tensorOb($sym.unitOb, $obX) },
+                          obI = '{ $sym.tensorOb(using $sym.unitOb, $obX) },
                           obO = obX
                         )
                     case R =>
                         TypedHomC(
                           hom = '{ $sym.rightUnit(using $obX).to },
-                          obI = '{ $sym.tensorOb($obX, $sym.unitOb) },
+                          obI = '{ $sym.tensorOb(using $obX, $sym.unitOb) },
                           obO = obX
                         )
                 end match
@@ -146,13 +146,13 @@ final class MGeneration[H[_, _]: Type, U[_]: Type, q <: Quotes & Singleton](sym:
                         TypedHomC(
                           hom = '{ $sym.leftUnit[x](using $obX).from },
                           obI = obX,
-                          obO = '{ $sym.tensorOb($sym.unitOb, $obX) }
+                          obO = '{ $sym.tensorOb(using $sym.unitOb, $obX) }
                         )
                     case R =>
                         TypedHomC(
                           hom = '{ $sym.rightUnit[x](using $obX).from },
                           obI = obX,
-                          obO = '{ $sym.tensorOb($obX, $sym.unitOb) }
+                          obO = '{ $sym.tensorOb(using $obX, $sym.unitOb) }
                         )
                 end match
     end grow
@@ -195,14 +195,14 @@ final class MGeneration[H[_, _]: Type, U[_]: Type, q <: Quotes & Singleton](sym:
                                     case R =>
                                         TypedHomC(
                                           hom = '{ $sym.assocLeft[a, b, c](using $obA, $obB, $obC) },
-                                          obI = '{ $sym.tensorOb($obA, $sym.tensorOb($obB, $obC)) },
-                                          obO = '{ $sym.tensorOb($sym.tensorOb($obA, $obB), $obC) }
+                                          obI = '{ $sym.tensorOb(using $obA, $sym.tensorOb(using $obB, $obC)) },
+                                          obO = '{ $sym.tensorOb(using $sym.tensorOb(using $obA, $obB), $obC) }
                                         )
                                     case L =>
                                         TypedHomC(
                                           hom = '{ $sym.assocRight[a, b, c](using $obA, $obB, $obC) },
-                                          obI = '{ $sym.tensorOb($sym.tensorOb($obA, $obB), $obC) },
-                                          obO = '{ $sym.tensorOb($obA, $sym.tensorOb($obB, $obC)) }
+                                          obI = '{ $sym.tensorOb(using $sym.tensorOb(using $obA, $obB), $obC) },
+                                          obO = '{ $sym.tensorOb(using $obA, $sym.tensorOb(using $obB, $obC)) }
                                         )
                                 end match
     end hrotate

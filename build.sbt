@@ -2,7 +2,7 @@ name := "volga"
 
 val publishVersion = "0.2"
 
-val scala3version = "3.3.3"
+val scala3version = "3.5.2"
 val scala2version = "2.13.14"
 
 crossScalaVersions := List(scala3version, scala2version)
@@ -66,6 +66,8 @@ lazy val core = project
     )
 
 lazy val prob = project.in(modules / "prob").settings(commonSettings).dependsOn(core)
+
+lazy val glue = project.in(modules / "glue").settings(commonSettings).dependsOn(core)
 
 val oldSettings = Vector(
   libraryDependencies ++= List(

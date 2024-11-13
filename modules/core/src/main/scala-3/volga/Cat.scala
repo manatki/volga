@@ -58,11 +58,11 @@ trait Iso[H[_, _], U[_], A, B] extends Aliases[H, U]:
     def to: H[A, B]
     def from: H[B, A]
 
-    def compose[C](other: C <--> A)(using Cat[H, U], Ob[A], Ob[B], Ob[C]): C <--> B = new:
+    infix def compose[C](other: C <--> A)(using Cat[H, U], Ob[A], Ob[B], Ob[C]): C <--> B = new:
         val to   = self.to <<< other.to
         val from = self.from >>> other.from
 
-    def andThen[C](other: B <--> C)(using Cat[H, U], Ob[A], Ob[B], Ob[C]): A <--> C =
+    infix def andThen[C](other: B <--> C)(using Cat[H, U], Ob[A], Ob[B], Ob[C]): A <--> C =
         other compose self
 
     def inverse: B <--> A = new:
@@ -70,7 +70,7 @@ trait Iso[H[_, _], U[_], A, B] extends Aliases[H, U]:
         val to               = self.from
         override def inverse = self
 
-    def tensor[C, D](
+    infix def tensor[C, D](
         other: Iso[H, U, C, D]
     )(using MonoidalCat[H, U], Ob[A], Ob[B], Ob[C], Ob[D]): (A x C) <--> (B x D) =
         Iso(self.to >< other.to, self.from >< other.from)
