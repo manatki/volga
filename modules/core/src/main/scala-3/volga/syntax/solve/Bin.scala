@@ -127,7 +127,7 @@ enum BinOp:
         case Swap               => { case Swap => Stop() }
         case Split(left, right) => {
             case Swap          => Continue(Split(right, left), Swap)
-            case Split(lo, ro) => Continue(Split(left mergeAll lo, right mergeAll ro))
+            case Split(lo, ro) => Continue(Split(left.mergeAll(lo), right.mergeAll(ro)))
         }
 
     def exchange(other: BinOp): BinOp.Exchange =
@@ -151,10 +151,10 @@ object BinOp:
     final case class Exchange(continue: Boolean, res: Vector[BinOp])
     extension (binops: Vector[BinOp])
         def invertAll: Vector[BinOp]                       = binops.reverseIterator.map(_.invert).toVector
-        def mergeAll(next: Iterable[BinOp]): Vector[BinOp] = next.foldLeft(binops)(_ merge _)
+        def mergeAll(next: Iterable[BinOp]): Vector[BinOp] = next.foldLeft(binops)(_.merge(_))
         def merge(op: BinOp): Vector[BinOp]                =
             if (op.isEmpty) binops else mergeOneLoop(op, Vector())
-        def optimize: Vector[BinOp]                        = Vector() mergeAll binops
+        def optimize: Vector[BinOp]                        = Vector().mergeAll(binops)
         def put(op: BinOp)                                 = if (op.isEmpty) binops else binops :+ op
 
         @tailrec private[BinOp] def mergeOneLoop(op: BinOp, rest: Vector[BinOp]): Vector[BinOp] = binops match
@@ -185,9 +185,9 @@ final case class BinZipper[+A](
 
     def goUp = parent.collect {
         case (L, BinZipper(Branch(_, r), ph, pp)) =>
-            BinZipper(Branch(bin, r), ph put Split(history, Vector()), pp)
+            BinZipper(Branch(bin, r), ph.put(Split(history, Vector())), pp)
         case (R, BinZipper(Branch(l, _), ph, pp)) =>
-            BinZipper(Branch(l, bin), ph put Split(Vector(), history), pp)
+            BinZipper(Branch(l, bin), ph.put(Split(Vector(), history)), pp)
     }
 
     def go(side: Side) =
@@ -203,25 +203,25 @@ final case class BinZipper[+A](
             case L => Branch(Bud, bin)
             case R => Branch(bin, Bud)
 
-        Some(BinZipper(bin1, history put Grow(side), parent))
+        Some(BinZipper(bin1, history.put(Grow(side)), parent))
 
     def consume(side: Side) =
         bin match
-            case Branch(Bud, t) if side == L => Some(BinZipper(t, history put Consume(side), parent))
-            case Branch(t, Bud) if side == R => Some(BinZipper(t, history put Consume(side), parent))
+            case Branch(Bud, t) if side == L => Some(BinZipper(t, history.put(Consume(side)), parent))
+            case Branch(t, Bud) if side == R => Some(BinZipper(t, history.put(Consume(side)), parent))
             case _                           => None
 
     def rotate(side: Side) =
         bin match
             case Branch(l, Branch(rl, rr)) if side == L =>
-                Some(BinZipper(Branch(Branch(l, rl), rr), history put Rotate(L), parent))
+                Some(BinZipper(Branch(Branch(l, rl), rr), history.put(Rotate(L)), parent))
             case Branch(Branch(ll, lr), r) if side == R =>
-                Some(BinZipper(Branch(ll, Branch(lr, r)), history put Rotate(R), parent))
+                Some(BinZipper(Branch(ll, Branch(lr, r)), history.put(Rotate(R)), parent))
             case _                                      => None
 
     def swap =
         bin match
-            case Branch(l, r) => Some(BinZipper(Branch(r, l), history put Swap, parent))
+            case Branch(l, r) => Some(BinZipper(Branch(r, l), history.put(Swap), parent))
             case _            => None
 
     def modify[A1 >: A](f: A => A1) =
@@ -254,7 +254,7 @@ final case class BinZipper[+A](
 
     def tree: Bin[A] = top.bin
 
-    def appMany(ops: Vector[BinOp]): Option[BinZipper[A]] = ops.foldOpt(this)(_ app _)
+    def appMany(ops: Vector[BinOp]): Option[BinZipper[A]] = ops.foldOpt(this)(_.app(_))
 
     def app(op: BinOp): Option[BinZipper[A]] = op match
         case Rotate(side)  => rotate(side)
@@ -329,7 +329,7 @@ enum BinRes[+A]:
         case branch: BranchRes[?] => branch.copy(history = Vector())
         case (_: LeafRes[?])      => this
 
-    final infix def withHistory[A1 >: A](prev: BinRes[A1], op: BinHistory[A1]): BinRes[A1] = this match
+    final def withHistory[A1 >: A](prev: BinRes[A1])(op: BinHistory[A1]): BinRes[A1] = this match
         case branch: BranchRes[?]         => branch.copy(history = prev.history :+ op)
         case _: (LeafRes[?] | FailRes[?]) => this
 
@@ -342,7 +342,7 @@ object BinRes:
 
     def apply[A](bin: Bin[A])(using A: PMagma[A]): BinRes[A] = bin match
         case Leaf(a)      => LeafRes(a)
-        case Branch(l, r) => BinRes(l) branch BinRes(r)
+        case Branch(l, r) => BinRes(l).branch(BinRes(r))
         case Bud          => LeafRes(A.empty)
 
     extension [A](b: BinRes[A])(using A: PMagma[A])
@@ -350,35 +350,39 @@ object BinRes:
             case FailRes(v, h, ls) => FailRes(b.value ## c.value, h, ls)
             case _                 => BranchRes(b, c, b.value ## c.value, Vector())
 
-        def modAll(ops: Vector[BinOp]): BinRes[A] = ops.foldLeft(b)(_ mod _)
+        def modAll(ops: Vector[BinOp]): BinRes[A] = ops.foldLeft(b)(_.mod(_))
 
         def mod(op: BinOp): BinRes[A] =
             op match
-                case Grow(L) => LeafRes(A.empty) branch b withHistory (b, HGrow(L, b.value))
-                case Grow(R) => b branch LeafRes(A.empty) withHistory (b, HGrow(R, b.value))
+                case Grow(L) => LeafRes(A.empty).branch(b).withHistory(b)(HGrow(L, b.value))
+                case Grow(R) => b.branch(LeafRes(A.empty)).withHistory(b)(HGrow(R, b.value))
                 case _       =>
                     b.ifBranch(op) { (l, r) =>
                         op match
-                            case Swap          => (r branch l) withHistory (b, HSwap(l.value, r.value))
-                            case Rotate(R)     =>
-                                l.ifBranch(op)((ll, lr) =>
-                                    ll.branch(lr.branch(r)) withHistory (b, HRotate(R, ll.value, lr.value, r.value))
-                                )
-                            case Rotate(L)     =>
-                                r.ifBranch(op)((rl, rr) =>
-                                    l.branch(rl).branch(rr) withHistory (b, HRotate(L, l.value, rl.value, rr.value))
-                                )
+                            case Swap      => (r.branch(l)).withHistory(b)(HSwap(l.value, r.value))
+                            case Rotate(R) =>
+                                l.ifBranch(op): (ll, lr) =>
+                                    ll.branch(lr.branch(r)).withHistory(b)(HRotate(R, ll.value, lr.value, r.value))
+
+                            case Rotate(L) =>
+                                r.ifBranch(op): (rl, rr) =>
+                                    l.branch(rl).branch(rr).withHistory(b)(HRotate(L, l.value, rl.value, rr.value))
+
                             case Split(ls, rs) =>
                                 val lt = l.clean.modAll(ls)
                                 val rt = r.clean.modAll(rs)
-                                lt.clean branch rt.clean withHistory (b,
-                                HSplit(
-                                  HChain(l.value, lt.value, lt.history),
-                                  HChain(r.value, rt.value, rt.history)
-                                ))
-                            case Consume(L)    => r.withHistory(b, HConsume(L, r.value))
-                            case Consume(R)    => l.withHistory(b, HConsume(R, r.value))
-                            case Grow(_)       => b
+                                lt.clean
+                                    .branch(rt.clean)
+                                    .withHistory(b)(
+                                      HSplit(
+                                        HChain(l.value, lt.value, lt.history),
+                                        HChain(r.value, rt.value, rt.history)
+                                      )
+                                    )
+
+                            case Consume(L) => r.withHistory(b)(HConsume(L, r.value))
+                            case Consume(R) => l.withHistory(b)(HConsume(R, r.value))
+                            case Grow(_)    => b
                         end match
                     }
             end match

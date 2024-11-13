@@ -53,8 +53,8 @@ object FreeCat:
     type Cocartesian[U[_], X, Y] = Monoidal[U, X, Y] | AllMonoids[U, X, Y]
     type Scalian[U[_], X, Y]     = Symmetric[U, X, Y] | Lifting[U, X, Y] | Application[U, X, Y]
 
-    type oo[U[_], A] = U[Obj[A]]
-    type ss[U[_], A] = U[Scala[A]]
+    infix type oo[U[_], A] = U[Obj[A]]
+    infix type ss[U[_], A] = U[Scala[A]]
     case class SpawnLeft[U[_], A]()(using val a: U oo A)    extends Monoidal[U, A, U[T[U[One], A]]]
     case class SpawnRight[U[_], A]()(using val a: U oo A)   extends Monoidal[U, A, U[T[A, U[One]]]]
     case class DropLeft[U[_], A]()(using val a: U oo A)     extends Monoidal[U, U[T[U[One], A]], A]
